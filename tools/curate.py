@@ -46,7 +46,7 @@ def py(zh):
     words = []
     for w in jieba.cut(zh):
         if re.fullmatch(r'[一-鿿]+', w):
-            s = ''.join(pypinyin.lazy_pinyin(w))
+            s = ''.join(p.replace('lv', 'lü').replace('nv', 'nü') for p in pypinyin.lazy_pinyin(w))
             words.append(s[:1].upper() + s[1:])
         elif w.strip(): words.append(w)
     out = ' '.join(words)
@@ -62,6 +62,8 @@ TYPO = [('Raliway', 'Railway'), ('Exhibiation', 'Exhibition'), ('Shaungdian', 'S
 for s in S:
     en = s[1] or ''
     for a, b in TYPO: en = en.replace(a, b)
+    # "Xi'an North Railway Station" -> "Xi'an North", except stops named after a station ("火车站")
+    if not s[0].endswith('车站'): en = re.sub(r'(?i)\s+(?:railway\s+|train\s+)?station$', '', en)
     if s[0] in STATION_EN: en = STATION_EN[s[0]]
     elif re.search(r'[一-鿿]', s[0]) and (not en or en == s[0] or re.search(r'[一-鿿]', en)
                                                   or BLOB.fullmatch(en.replace(' ', '')) and ' ' not in en
@@ -78,7 +80,6 @@ for s in S:
         if m and m.group(2).capitalize() in DIRWORD and DIRWORD[m.group(2).capitalize()] == DIR[zh[-1]]:
             base = m.group(1)
             en = (base[:1].upper() + base[1:]) + ' ' + DIR[zh[-1]]
-    en = re.sub(r'(?<=[LlNn])v(?=[a-z]|$)', 'ü', en) if re.search(r'[\u4e00-\u9fff]', zh) and re.search(r'[LlNn]v', en) else en
     s[1] = en
 by_name = {}
 for i, s in enumerate(S): by_name.setdefault(s[0], []).append(i)
@@ -115,8 +116,16 @@ for i, l in enumerate(L):
     base = re.sub(r'^\(原\)', '', re.sub(r'(重载铁路|铁路|线)$', '', zh))
     if l[0] == 'r' and (base in FREIGHT or re.search(r'港(?:线|铁路|支线|二线)$|煤|矿', zh)):
         hide(i, 'freight only'); continue
+    if l[0] in 'hr' and not re.search(r'[一-鿿]', zh):
+        hide(i, 'intercity line without a name (industrial or mine track)'); continue
+    if l[0] in URBAN_K and not (zh or en or l[3]):
+        hide(i, 'urban line without a name or number'); continue
+    if l[0] in URBAN_K and not (zh or en):
+        l[2] = en = (f'Tram {l[3]}' if l[0] == 't' else f'Line {l[3]}')
     if NONROUTE.search(zh) and '城际' not in zh:
         hide(i, 'non-passenger track'); continue
+    if l[0] == 'r' and (len(set(l[6])) < 3 or '旧线' in zh):
+        hide(i, 'conventional line with under three stops, or an old alignment'); continue
     few = len(l[6]) < 2 and not (l[0] in URBAN_K and zh in KEEP_FEW)
     if few and (l[0] in URBAN_K or (l[9] or 0) < 30):
         hide(i, 'fewer than two stations mapped'); continue
