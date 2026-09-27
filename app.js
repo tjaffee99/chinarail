@@ -80,11 +80,11 @@ function isDark() {
 const PAL = {
   light: { land:'#F2F0EB', urban:'#EAE7E0', water:'#A7D2F2', waterLine:'#8FC3EA', park:'#CDE8C0', reserve:'#DDEEDA', airport:'#E6E4EC', uni:'#EEE6DC',
            road:'#FFFFFF', roadCase:'#D6D1C7', motor:'#FFFFFF', motorCase:'#D2CDC3', roadLow:'#D9D5CC', bnd:'#B0A99E', bnd4:'#C9C3B9', bndGlow:'#DDD7CC',
-           hsr:'#48566E', rail:'#9CA1A9', railDash:'#FFFFFF', casing:'#FFFFFF', label:'#3A3A3C', label2:'#6C6C72', halo:'rgba(255,255,255,0.92)',
+           hsr:'#2E63D6', rail:'#8657D8', track:'#BDB7AE', hsrText:'#1F4BB0', railText:'#6A3FC0', casing:'#FFFFFF', label:'#3A3A3C', label2:'#6C6C72', halo:'rgba(255,255,255,0.92)',
            city:'#2C2C2E', town:'#5A5A60', building:'#E3DFD7', buildingEdge:'#D6D1C7', wood:'#DCEAD2', sand:'#EEE8D8', ice:'#FBFBFD', road2:'#FDFBF6', path:'#CFC9BE', poi:'#7A7A80', waterLabel:'#4A7FAE', stnFill:'#FFFFFF', stnStroke:'#2C2C2E', sel:'#0A7AFF', dimOp:0.22 },
   dark:  { land:'#1F2124', urban:'#26282C', water:'#1A3957', waterLine:'#22476B', park:'#1F3829', reserve:'#1D2B22', airport:'#282830', uni:'#2A2724',
            road:'#3A3D43', roadCase:'#2B2D31', motor:'#43464D', motorCase:'#2F3136', roadLow:'#35383D', bnd:'#6E7177', bnd4:'#46494E', bndGlow:'#2C2F33',
-           hsr:'#93A6C6', rail:'#6F747C', railDash:'#1E2023', casing:'#1E2023', label:'#E9E9EE', label2:'#A1A1A8', halo:'rgba(24,25,28,0.92)',
+           hsr:'#6D98FF', rail:'#AE8BF5', track:'#55585F', hsrText:'#9DBBFF', railText:'#C7AEFA', casing:'#1E2023', label:'#E9E9EE', label2:'#A1A1A8', halo:'rgba(24,25,28,0.92)',
            city:'#F2F2F7', town:'#C4C4CA', building:'#2B2D31', buildingEdge:'#35383D', wood:'#1E2E23', sand:'#2A2823', ice:'#2C3036', road2:'#36393F', path:'#44474D', poi:'#8E8E95', waterLabel:'#7FA8D0', stnFill:'#1E2023', stnStroke:'#E9E9EE', sel:'#3D9BFF', dimOp:0.2 }
 };
 let P = PAL[isDark() ? 'dark' : 'light'];
@@ -110,6 +110,38 @@ function nameField(big) {
   if (labelMode === 'zh') return ['get', 'z'];
   return ['case', ['any', ['==', ['get', 'n'], ['get', 'z']], ['==', ['get', 'n'], '']], ['get', 'z'],
     ['format', ['get', 'n'], {}, '\n', {}, ['get', 'z'], { 'font-scale': 0.86, 'text-color': P.label2 }]];
+}
+// station name with a row of route bullets underneath (image generated on demand: see styleimagemissing)
+function nameWithBullets() {
+  const img = ['image', ['concat', 'bs|', ['to-string', ['get', 'i']]]];
+  const n = ['get', 'n'], z = ['get', 'z'];
+  if (labelMode === 'en') return ['format', n, {}, '\n', {}, img, {}];
+  if (labelMode === 'zh') return ['format', z, {}, '\n', {}, img, {}];
+  return ['case', ['any', ['==', n, z], ['==', n, '']], ['format', z, {}, '\n', {}, img, {}],
+    ['format', n, {}, '\n', {}, z, { 'font-scale': 0.86, 'text-color': P.label2 }, '\n', {}, img, {}]];
+}
+// POI categories: [OpenMapTiles classes, light label colour, dark label colour]; dot colour = light colour
+const POI_COLORS = {
+  food: ['#F08A24', '#C8660B', '#F7A95A'], shop: ['#E6A700', '#A87A00', '#F2C94C'], hotel: ['#8E5CE6', '#7443CC', '#B596F2'],
+  health: ['#E5484D', '#C53034', '#F07B7F'], edu: ['#9B7652', '#7D5A38', '#C6A27E'], park: ['#35A457', '#1F8440', '#6CCB86'],
+  culture: ['#D8508F', '#B53574', '#EC89B7'], transport: ['#2E80E6', '#1C62BA', '#72A9F0'], other: ['#8E8E93', '#6C6C72', '#A1A1A8'],
+};
+const POI_CAT = ['match', ['get', 'class'],
+  ['restaurant', 'fast_food', 'cafe', 'bar', 'beer', 'ice_cream', 'bakery', 'food_court', 'pub'], 'food',
+  ['shop', 'grocery', 'clothing_store', 'supermarket', 'mall', 'department_store', 'jewelry', 'books', 'gift', 'shoes', 'hardware', 'mobile_phone', 'electronics', 'furniture', 'convenience', 'alcohol_shop', 'bag', 'cosmetics', 'florist', 'hairdresser', 'optician'], 'shop',
+  ['lodging', 'hotel'], 'hotel',
+  ['hospital', 'pharmacy', 'doctors', 'dentist', 'clinic', 'veterinary'], 'health',
+  ['college', 'school', 'library', 'kindergarten', 'university'], 'edu',
+  ['park', 'garden', 'playground', 'zoo', 'campsite', 'golf', 'stadium', 'pitch', 'sports_centre', 'swimming_pool', 'attraction'], 'park',
+  ['museum', 'art_gallery', 'theatre', 'cinema', 'music', 'castle', 'monument', 'place_of_worship', 'religion', 'historic', 'arts_centre'], 'culture',
+  ['airport', 'harbor', 'ferry_terminal', 'parking', 'fuel', 'car', 'bicycle_rental'], 'transport',
+  'other'];
+function makePoiDot(color) {
+  const s = 13 * DPR; const [c, ctx] = canvas(s, s);
+  ctx.beginPath(); ctx.arc(s / 2, s / 2, 5.3 * DPR, 0, 7); ctx.fillStyle = color; ctx.fill();
+  ctx.lineWidth = 1.5 * DPR; ctx.strokeStyle = '#FFFFFF'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(s / 2, s / 2, 1.7 * DPR, 0, 7); ctx.fillStyle = '#FFFFFF'; ctx.fill();
+  return img(c);
 }
 // base map (OpenMapTiles schema) names
 const EN = ['coalesce', ['get', 'name:en'], ['get', 'name_en'], ['get', 'name:latin'], ['get', 'name']];
@@ -177,49 +209,75 @@ function buildStyle() {
       'line-width': roadW([[5, 0.5, 0.4, 0.3, 0.2, 0.2, 0.2, 0.1], [8, 1, 0.9, 0.7, 0.5, 0.4, 0.3, 0.2], [11, 1.6, 1.4, 1.2, 1, 0.8, 0.5, 0.3], [14, 5, 4.6, 4.2, 3.6, 3, 2.4, 1.2], [18, 22, 20, 18, 16, 14, 12, 6]]) } });
   // intercity rail
   const on = k => vis[k] ? 'visible' : 'none';
-  L.push({ id: 'rail-r', type: 'line', source: 'rail', 'source-layer': 'rail', filter: ['all', ['==', ['get', 'k'], 'r'], ['>=', ['get', 'l'], 0]], layout: { visibility: on('r'), 'line-join': 'round' }, paint: { 'line-color': P.rail, 'line-opacity': dim, 'line-width': W([[4, 0.5], [8, 1.1], [11, 2.2], [14, 3.6], [17, 6]]) } });
-  L.push({ id: 'rail-r-dash', type: 'line', source: 'rail', 'source-layer': 'rail', minzoom: 11, filter: ['all', ['==', ['get', 'k'], 'r'], ['>=', ['get', 'l'], 0]], layout: { visibility: on('r') }, paint: { 'line-color': P.railDash, 'line-opacity': dim, 'line-width': W([[11, 0.8], [14, 1.4], [17, 2.4]]), 'line-dasharray': [2, 3] } });
-  L.push({ id: 'rail-h-case', type: 'line', source: 'rail', 'source-layer': 'rail', minzoom: 9, filter: ['==', ['get', 'k'], 'h'], layout: { visibility: on('h'), 'line-join': 'round' }, paint: { 'line-color': P.casing, 'line-opacity': dim, 'line-width': W([[9, 3.4], [12, 5], [14, 6.4], [17, 9]]) } });
-  L.push({ id: 'rail-h', type: 'line', source: 'rail', 'source-layer': 'rail', filter: ['==', ['get', 'k'], 'h'], layout: { visibility: on('h'), 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': P.hsr, 'line-opacity': dim, 'line-width': W([[3, 0.7], [6, 1.2], [9, 1.9], [12, 3], [14, 4], [17, 6]]) } });
+  const kindColor = ['match', ['get', 'k'], 'h', P.hsr, 'r', P.rail, P.track];
+  L.push({ id: 'rail-x', type: 'line', source: 'rail', 'source-layer': 'rail', minzoom: 8, filter: ['==', ['get', 'k'], 'x'], layout: { visibility: vis.r ? 'visible' : 'none', 'line-join': 'round' },
+    paint: { 'line-color': P.track, 'line-opacity': sel == null ? 0.9 : 0.4, 'line-width': W([[8, 0.5], [12, 1.1], [16, 2.2]]) } });
+  L.push({ id: 'rail-r-case', type: 'line', source: 'rail', 'source-layer': 'rail', minzoom: 8, filter: ['==', ['get', 'k'], 'r'], layout: { visibility: on('r'), 'line-join': 'round' },
+    paint: { 'line-color': P.casing, 'line-opacity': dim, 'line-width': W([[8, 3], [12, 5], [15, 7.4], [18, 10]]) } });
+  L.push({ id: 'rail-r', type: 'line', source: 'rail', 'source-layer': 'rail', filter: ['==', ['get', 'k'], 'r'], layout: { visibility: on('r'), 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': P.rail, 'line-opacity': dim, 'line-width': W([[3, 0.55], [5, 0.85], [7, 1.25], [9, 1.8], [12, 2.8], [15, 4.4], [18, 6.2]]) } });
+  L.push({ id: 'rail-h-case', type: 'line', source: 'rail', 'source-layer': 'rail', minzoom: 6, filter: ['==', ['get', 'k'], 'h'], layout: { visibility: on('h'), 'line-join': 'round' },
+    paint: { 'line-color': P.casing, 'line-opacity': dim, 'line-width': W([[6, 3], [9, 4.6], [12, 6.2], [15, 8.4], [18, 11.5]]) } });
+  L.push({ id: 'rail-h', type: 'line', source: 'rail', 'source-layer': 'rail', filter: ['==', ['get', 'k'], 'h'], layout: { visibility: on('h'), 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': P.hsr, 'line-opacity': dim, 'line-width': W([[3, 0.9], [5, 1.35], [7, 1.9], [9, 2.6], [12, 3.6], [15, 5.2], [18, 7.5]]) } });
   // urban rail
   const ucase = { type: 'line', source: 'rail', 'source-layer': 'rail', minzoom: 10, layout: { 'line-join': 'round', 'line-cap': 'round' } };
   L.push(Object.assign({ id: 'u-case', filter: ['in', ['get', 'k'], ['literal', ['m', 'l', 's', 't']]], paint: { 'line-color': P.casing, 'line-opacity': sel == null ? 0.95 : 0.3, 'line-width': ['interpolate', ['exponential', 1.5], ['zoom'], 10, ['match', ['get', 'k'], 't', 2.8, 'l', 3.6, 4.4], 14, ['match', ['get', 'k'], 't', 5.5, 'l', 7.5, 9], 17, ['match', ['get', 'k'], 't', 9, 'l', 12, 14]] } }, ucase));
-  const uline = (id, k, w, extra = {}) => ({ id, type: 'line', source: 'rail', 'source-layer': 'rail', filter: ['==', ['get', 'k'], k], layout: Object.assign({ visibility: on(id === 'u-s' ? 'm' : id === 'u-f' ? 't' : k), 'line-join': 'round', 'line-cap': 'round' }, extra.layout || {}), paint: Object.assign({ 'line-color': ['get', 'c'], 'line-opacity': dim, 'line-width': W(w) }, extra.paint || {}) });
+  const uline = (id, k, w, extra = {}) => ({ id, type: 'line', source: 'rail', 'source-layer': 'rail', filter: ['==', ['get', 'k'], k], layout: Object.assign({ visibility: on(id === 'u-s' ? 'm' : id === 'u-f' ? 't' : k), 'line-join': 'round', 'line-cap': 'round' }, extra.layout || {}), paint: Object.assign({ 'line-color': ['coalesce', ['get', 'c'], P.rail], 'line-opacity': dim, 'line-width': W(w) }, extra.paint || {}) });
   L.push(uline('u-t', 't', [[9, 0.8], [12, 1.8], [14, 3], [17, 6]]));
   L.push(uline('u-f', 'f', [[11, 1], [14, 2], [17, 4]], { paint: { 'line-dasharray': [1, 1] } }));
   L.push(uline('u-l', 'l', [[8, 0.8], [11, 1.8], [14, 4.4], [17, 8.5]]));
   L.push(uline('u-s', 's', [[7, 0.8], [10, 1.6], [12, 2.8], [14, 4.8], [17, 9.5]]));
   L.push(uline('u-m', 'm', [[7, 0.9], [9, 1.6], [11, 2.6], [12, 3.4], [14, 5.6], [17, 11]]));
-  // line badges
+  // line names along intercity lines, and route bullets along metro lines
+  const shownKinds = ['h', 'r'].filter(k => vis[k]);
+  L.push({ id: 'rail-name', type: 'symbol', source: 'rail', 'source-layer': 'rail', minzoom: 6, maxzoom: 12, filter: ['all', ['has', 'nm'], ['in', ['get', 'k'], ['literal', shownKinds]]],
+    layout: { visibility: sel == null ? 'visible' : 'none', 'symbol-placement': 'line', 'symbol-spacing': 520, 'text-field': labelMode === 'zh' ? ['get', 'nz'] : ['get', 'nm'],
+      'text-font': ['NotoSansMedium'], 'text-size': ['interpolate', ['linear'], ['zoom'], 6, 10.5, 11, 12.5], 'text-max-angle': 28, 'text-letter-spacing': 0.02, 'text-padding': 6,
+      'symbol-sort-key': ['match', ['get', 'k'], 'h', 0, 1] },
+    paint: { 'text-color': ['match', ['get', 'k'], 'h', P.hsrText, P.railText], 'text-halo-color': P.halo, 'text-halo-width': 2 } });
   L.push({ id: 'badges', type: 'symbol', source: 'rail', 'source-layer': 'rail', minzoom: 12, filter: ['all', modeFilter(['m', 'l', 's']), ['!=', ['coalesce', ['get', 'r'], ''], '']],
     layout: { 'symbol-placement': 'line', 'symbol-spacing': 420, 'icon-image': ['concat', 'b|', ['get', 'c'], '|', ['get', 'r']], 'icon-rotation-alignment': 'viewport', 'icon-size': 1, 'icon-padding': 4, visibility: sel == null ? 'visible' : 'none' } });
   // selection
   const selF = ['in', selKey, ['get', 'ls']];
-  L.push({ id: 'sel-case', type: 'line', source: 'rail', 'source-layer': 'rail', filter: selF, layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': P.casing, 'line-width': W([[3, 3], [8, 5], [12, 8], [14, 11], [17, 16]]) } });
-  L.push({ id: 'sel-line', type: 'line', source: 'rail', 'source-layer': 'rail', filter: selF, layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': ['coalesce', ['get', 'c'], P.sel], 'line-width': W([[3, 1.6], [8, 3], [12, 5], [14, 7], [17, 11]]) } });
-  // stations
+  L.push({ id: 'sel-case', type: 'line', source: 'rail', 'source-layer': 'rail', filter: selF, layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': P.casing, 'line-width': W([[3, 3.4], [8, 5.6], [12, 8.4], [14, 11], [17, 16]]) } });
+  L.push({ id: 'sel-line', type: 'line', source: 'rail', 'source-layer': 'rail', filter: selF, layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': sel != null && D ? lineColor(sel) : P.sel, 'line-width': W([[3, 1.8], [8, 3.2], [12, 5], [14, 7], [17, 11]]) } });
+  // intercity stations: white dots ringed in the line colour, hubs ringed dark; train glyph from z11
   const sk = stnModeFilter();
-  L.push({ id: 'stn-rail', type: 'symbol', source: 'rail', 'source-layer': 'stn', filter: ['all', ['in', ['get', 'k'], ['literal', sk.filter(k => k === 'h' || k === 'r')]]],
-    layout: { 'icon-image': ['match', ['get', 'k'], 'h', 'st-h', 'st-r'], 'icon-size': ['interpolate', ['linear'], ['zoom'], 5, 0.55, 9, 0.75, 13, 1], 'icon-allow-overlap': false, 'icon-padding': 1,
+  const hub = ['any', ['>=', ['get', 'rk'], 10], ['>', ['get', 'x'], 2]];
+  L.push({ id: 'stn-rail', type: 'symbol', source: 'rail', 'source-layer': 'stn', filter: ['in', ['get', 'k'], ['literal', sk.filter(k => k === 'h' || k === 'r')]],
+    layout: { 'icon-image': ['step', ['zoom'], ['case', hub, 'hub', ['match', ['get', 'k'], 'h', 'dot-h', 'dot-r']], 11, ['match', ['get', 'k'], 'h', 'st-h', 'st-r']],
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 4, 0.6, 8, 0.85, 11, 0.8, 14, 1], 'icon-allow-overlap': true, 'icon-ignore-placement': true,
       'symbol-sort-key': ['-', 0, ['get', 'rk']],
       'text-field': sel != null ? '' : ['step', ['zoom'], ['case', ['>=', ['get', 'rk'], 11], nameField(), ''], 7, ['case', ['>=', ['get', 'rk'], 8], nameField(), ''], 9, ['case', ['>=', ['get', 'rk'], 5], nameField(), ''], 11, nameField()],
-      'text-font': ['NotoSansMedium'], 'text-size': ['interpolate', ['linear'], ['zoom'], 5, 11, 12, 12.5, 16, 14], 'text-justify': 'auto', 'text-optional': true, 'text-max-width': 12, 'text-line-height': 1.15,
-      'text-variable-anchor': ['left', 'right', 'top', 'bottom'], 'text-radial-offset': 0.95 },
-    paint: { 'text-color': P.label, 'text-halo-color': P.halo, 'text-halo-width': 1.6, 'icon-opacity': sel == null ? 1 : 0.35, 'text-opacity': sel == null ? 1 : 0.35 } });
+      'text-font': ['case', hub, ['literal', ['NotoSansMedium']], ['literal', ['NotoSansRegular']]],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 5, ['case', hub, 12, 10.5], 10, ['case', hub, 14, 12], 16, ['case', hub, 16, 13.5]],
+      'text-justify': 'auto', 'text-optional': true, 'text-max-width': 12, 'text-line-height': 1.15,
+      'text-variable-anchor': ['left', 'right', 'top', 'bottom'], 'text-radial-offset': ['step', ['zoom'], 0.7, 11, 1.05] },
+    paint: { 'text-color': ['case', hub, P.label, P.label2], 'text-halo-color': P.halo, 'text-halo-width': 1.8,
+      'icon-opacity': sel != null ? 0.35 : ['step', ['zoom'], ['case', ['>=', ['get', 'rk'], 8], 1, 0], 6, ['case', ['>=', ['get', 'rk'], 5], 1, 0], 8, 1],
+      'text-opacity': sel == null ? 1 : 0.35 } });
   const uk = ['in', ['get', 'k'], ['literal', sk.filter(k => k === 'm' || k === 't' || k === 'f')]];
-  const uCircle = (id, minzoom, extra) => ({ id, type: 'circle', source: 'rail', 'source-layer': 'stn', minzoom, filter: ['all', uk, extra],
-    paint: { 'circle-color': P.stnFill, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, ['case', ['>', ['get', 'x'], 1], 3, 2], 14, ['case', ['>', ['get', 'x'], 1], 6, 4], 17, ['case', ['>', ['get', 'x'], 1], 9, 6]],
-      'circle-stroke-color': ['case', ['>', ['get', 'x'], 1], P.stnStroke, ['get', 'c']], 'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 11, 1.2, 14, 2, 17, 2.6], 'circle-opacity': sel == null ? 1 : 0.3, 'circle-stroke-opacity': sel == null ? 1 : 0.3 } });
-  L.push(uCircle('stn-u1', 12, ['<=', ['get', 'x'], 1]));
-  L.push(uCircle('stn-u', 11, ['>', ['get', 'x'], 1]));
+  // metro station dots as icons (not circles) so that route badges and labels avoid them
+  const th = isDark() ? 'D' : 'L';
+  const uDot = (id, minzoom, extra, transfer) => ({ id, type: 'symbol', source: 'rail', 'source-layer': 'stn', minzoom, filter: ['all', uk, extra],
+    layout: { 'icon-image': transfer ? 'hubm|' + th : ['concat', 'sd|' + th + '|', ['coalesce', ['get', 'c'], '#888888']],
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 11, transfer ? 0.42 : 0.38, 14, transfer ? 0.85 : 0.78, 17, transfer ? 1.3 : 1.15],
+      'icon-allow-overlap': true, 'icon-padding': 0, 'symbol-sort-key': ['-', 0, ['get', 'x']] },
+    paint: { 'icon-opacity': sel == null ? 1 : 0.3 } });
+  L.push(uDot('stn-u1', 12, ['<=', ['get', 'x'], 1], false));
+  L.push(uDot('stn-u', 11, ['>', ['get', 'x'], 1], true));
+  // metro station names; from z14 with the route bullets underneath, as on a transit map
   const uLabel = (id, minzoom, extra) => ({ id, type: 'symbol', source: 'rail', 'source-layer': 'stn', minzoom, filter: ['all', uk, extra],
-    layout: { visibility: sel == null ? 'visible' : 'none', 'text-field': nameField(), 'text-font': ['NotoSansMedium'], 'text-size': ['interpolate', ['linear'], ['zoom'], 12, 11, 16, 13.5], 'text-variable-anchor': ['left', 'right', 'top', 'bottom'], 'text-radial-offset': 0.85, 'text-justify': 'auto', 'text-max-width': 10, 'text-line-height': 1.15, 'symbol-sort-key': ['-', 0, ['get', 'x']] },
+    layout: { visibility: sel == null ? 'visible' : 'none', 'text-field': ['step', ['zoom'], nameField(), 14.5, nameWithBullets()], 'text-font': ['NotoSansMedium'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 12, 11, 16, 13.5], 'text-variable-anchor': ['left', 'right', 'top', 'bottom'], 'text-radial-offset': 0.85, 'text-justify': 'auto',
+      'text-max-width': 10, 'text-line-height': 1.2, 'symbol-sort-key': ['-', 0, ['get', 'x']] },
     paint: { 'text-color': P.label, 'text-halo-color': P.halo, 'text-halo-width': 1.6, 'text-opacity': sel == null ? 1 : 0.3 } });
   L.push(uLabel('stn-u-label', 12, ['>', ['get', 'x'], 1]));
   L.push(uLabel('stn-u1-label', 13.5, ['<=', ['get', 'x'], 1]));
   // selected line stations (always labelled)
   L.push({ id: 'sel-stn', type: 'circle', source: 'rail', 'source-layer': 'stn', filter: selF,
-    paint: { 'circle-color': P.stnFill, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 2.5, 10, 4, 14, 6.5, 17, 8], 'circle-stroke-color': ['case', ['>', ['get', 'x'], 1], P.stnStroke, ['coalesce', ['get', 'c'], P.stnStroke]], 'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 5, 1.4, 12, 2.2, 17, 3] } });
+    paint: { 'circle-color': P.stnFill, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 2.5, 10, 4, 14, 6.5, 17, 8], 'circle-stroke-color': ['case', ['>', ['get', 'x'], 1], P.stnStroke, sel != null && D ? lineColor(sel) : P.stnStroke], 'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 5, 1.4, 12, 2.2, 17, 3] } });
   L.push({ id: 'sel-stn-label', type: 'symbol', source: 'rail', 'source-layer': 'stn', filter: selF,
     layout: { 'text-field': nameField(), 'text-font': ['NotoSansMedium'], 'text-size': ['interpolate', ['linear'], ['zoom'], 6, 11, 16, 14], 'text-variable-anchor': ['left', 'right', 'top', 'bottom'], 'text-radial-offset': 0.9, 'text-justify': 'auto', 'text-max-width': 10, 'text-line-height': 1.15, 'symbol-sort-key': ['-', 0, ['get', 'rk']] },
     paint: { 'text-color': P.label, 'text-halo-color': P.halo, 'text-halo-width': 1.8 } });
@@ -237,14 +295,21 @@ function buildStyle() {
   L.push({ ...B, id: 'road-name', type: 'symbol', 'source-layer': 'transportation_name', minzoom: 13, filter: cls('motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor'),
     layout: { 'text-field': baseName(), 'text-font': ['NotoSansRegular'], 'text-size': ['interpolate', ['linear'], ['zoom'], 13, 10, 17, 12.5], 'symbol-placement': 'line', 'symbol-spacing': 350, 'text-max-angle': 30, 'text-padding': 2, 'text-line-height': 1 },
     paint: { 'text-color': P.label2, ...halo } });
-  L.push({ ...B, id: 'poi-dot', type: 'circle', 'source-layer': 'poi', minzoom: 15, filter: ['all', ['<=', ['get', 'rank'], ['step', ['zoom'], 3, 16, 12, 17, 30]], ['!', cls('railway', 'bus')]],
-    paint: { 'circle-radius': 2.6, 'circle-color': P.poi, 'circle-stroke-color': P.halo, 'circle-stroke-width': 1 } });
-  L.push({ ...B, id: 'poi', type: 'symbol', 'source-layer': 'poi', minzoom: 15, filter: ['all', ['<=', ['get', 'rank'], ['step', ['zoom'], 3, 16, 12, 17, 30]], ['!', cls('railway', 'bus')]],
-    layout: { 'text-field': baseName(), 'text-font': ['NotoSansRegular'], 'text-size': 11, 'text-max-width': 8, 'text-anchor': 'left', 'text-offset': [0.6, 0], 'text-line-height': 1.1, 'symbol-sort-key': ['get', 'rank'], 'text-padding': 3 },
-    paint: { 'text-color': P.poi, ...halo } });
-  L.push({ ...B, id: 'airport', type: 'symbol', 'source-layer': 'aerodrome_label', minzoom: 9, filter: ['has', 'iata'],
-    layout: { 'text-field': ['step', ['zoom'], ['get', 'iata'], 12, baseName()], 'text-font': ['NotoSansMedium'], 'text-size': 11, 'text-max-width': 8, 'text-padding': 4 },
-    paint: { 'text-color': P.label2, ...halo } });
+  // points of interest: colour-coded by category, label in the same hue (as Apple Maps does)
+  const poiF = ['all', ['<=', ['get', 'rank'], ['step', ['zoom'], 3, 16, 12, 17, 30]], ['!', cls('railway', 'bus', 'aerialway')]];
+  L.push({ ...B, id: 'poi', type: 'symbol', 'source-layer': 'poi', minzoom: 15, filter: poiF,
+    layout: { 'icon-image': ['concat', 'pc|', POI_CAT], 'icon-size': 1, 'text-field': baseName(), 'text-font': ['NotoSansMedium'], 'text-size': 11, 'text-max-width': 8,
+      'text-anchor': 'left', 'text-offset': [0.85, 0], 'text-line-height': 1.1, 'text-optional': true, 'symbol-sort-key': ['get', 'rank'], 'text-padding': 3 },
+    paint: { 'text-color': ['match', POI_CAT, ...Object.entries(POI_COLORS).flatMap(([k, v]) => [k, isDark() ? v[2] : v[1]]), P.poi], ...halo } });
+  L.push({ ...B, id: 'road-shield', type: 'symbol', 'source-layer': 'transportation_name', minzoom: 7,
+    filter: ['all', ['has', 'ref'], cls('motorway', 'trunk', 'primary'), ['any', cls('motorway'), ['>=', ['zoom'], 10]]],
+    layout: { 'symbol-placement': 'line', 'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 7, 300, 14, 600], 'icon-rotation-alignment': 'viewport', 'icon-padding': 6,
+      'icon-image': ['concat', 'sh|', ['match', ['get', 'class'], 'motorway', 'm', 'o'], '|',
+        ['let', 'r', ['get', 'ref'], ['slice', ['var', 'r'], 0, ['case', ['>=', ['index-of', ';', ['var', 'r']], 0], ['index-of', ';', ['var', 'r']], ['min', ['length', ['var', 'r']], 7]]]]] } });
+  L.push({ ...B, id: 'airport', type: 'symbol', 'source-layer': 'aerodrome_label', minzoom: 8, filter: ['has', 'iata'],
+    layout: { 'icon-image': 'ap', 'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 12, 1], 'text-field': ['step', ['zoom'], ['get', 'iata'], 11, baseName()], 'text-font': ['NotoSansMedium'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 8, 11, 14, 13], 'text-max-width': 8, 'text-anchor': 'left', 'text-offset': [1.05, 0], 'text-optional': true, 'text-padding': 4 },
+    paint: { 'text-color': isDark() ? '#6FB1FF' : '#1767D2', ...halo } });
   const place = (id, classes, minzoom, size, font, color, extra = {}) => ({ ...B, id, type: 'symbol', 'source-layer': 'place', minzoom, filter: ['all', cls(...classes), ...(extra.filter || [])],
     layout: Object.assign({ 'text-field': baseName(), 'text-font': [font], 'text-size': size, 'text-max-width': 8, 'text-line-height': 1.1, 'symbol-sort-key': ['get', 'rank'], 'text-padding': 4 }, extra.layout || {}),
     paint: Object.assign({ 'text-color': color, ...halo }, extra.paint || {}) });
@@ -305,12 +370,75 @@ function makeTrainIcon(bg) {
   ctx.beginPath(); ctx.moveTo(7.6 * u, 14.2 * u); ctx.lineTo(6.2 * u, 16 * u); ctx.moveTo(12.4 * u, 14.2 * u); ctx.lineTo(13.8 * u, 16 * u); ctx.stroke();
   return { width: s, height: s, data: ctx.getImageData(0, 0, s, s).data };
 }
-function addIcons(map) {
-  for (const [id, col] of [['st-h', P.hsr], ['st-r', isDark() ? '#7A7F87' : '#8A8F97']]) {
-    if (map.hasImage(id)) map.removeImage(id);
-    map.addImage(id, makeTrainIcon(col), { pixelRatio: DPR });
-  }
+function canvas(w, h) { const c = document.createElement('canvas'); c.width = Math.ceil(w); c.height = Math.ceil(h); return [c, c.getContext('2d')]; }
+function img(c) { return { width: c.width, height: c.height, data: c.getContext('2d').getImageData(0, 0, c.width, c.height).data }; }
+// station dot: white disc with a coloured ring (Apple-style)
+function makeDot(ring, r, w, fill) {
+  const s = (r + w + 1) * 2 * DPR; const [c, ctx] = canvas(s, s);
+  ctx.beginPath(); ctx.arc(s / 2, s / 2, r * DPR, 0, 7); ctx.fillStyle = fill; ctx.fill();
+  ctx.lineWidth = w * DPR; ctx.strokeStyle = ring; ctx.stroke();
+  return img(c);
 }
+// row of route bullets for a station label
+function makeBulletRow(si) {
+  const ids = D && D.stations[si] ? sortLines(allLinesAt(si).filter(x => !D.lines[x][10] && 'mlstf'.includes(D.lines[x][0]))).slice(0, 8) : [];
+  if (!ids.length) { const [c] = canvas(1, 1); return img(c); }
+  const fs = 10.5 * DPR, h = 15 * DPR, pad = 3.5 * DPR, gap = 2.5 * DPR;
+  const [m, mctx] = canvas(1, 1); mctx.font = `700 ${fs}px -apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif`;
+  const items = ids.map(i => { const t = badgeText(D.lines[i]); return { t, col: D.lines[i][4] || (D.lines[i][0] === 't' ? '#3FA34D' : '#888888'), w: t ? Math.max(h, mctx.measureText(t).width + pad * 2) : h * 0.7 }; });
+  const W = items.reduce((a, b) => a + b.w, 0) + gap * (items.length - 1) + 2 * DPR;
+  const [c, ctx] = canvas(W, h + 2 * DPR);
+  ctx.font = mctx.font; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  let x = DPR;
+  for (const it of items) {
+    ctx.fillStyle = '#FFFFFF'; rr(ctx, x - DPR, 0, it.w + 2 * DPR, h + 2 * DPR, 5 * DPR); ctx.fill();
+    ctx.fillStyle = it.col;
+    if (it.t) { rr(ctx, x, DPR, it.w, h, 4 * DPR); ctx.fill(); ctx.fillStyle = textOn(it.col); ctx.fillText(it.t, x + it.w / 2, DPR + h / 2 + 0.5 * DPR); }
+    else { ctx.beginPath(); ctx.arc(x + it.w / 2, DPR + h / 2, it.w / 2, 0, 7); ctx.fill(); }
+    x += it.w + gap;
+  }
+  return img(c);
+}
+// road shields: expressways green (red band = national G, yellow band = provincial S); other national roads red, provincial yellow
+function makeShield(kind, ref) {
+  const fs = 10 * DPR, h = 15 * DPR, pad = 4 * DPR;
+  const [m, mctx] = canvas(1, 1); const font = `700 ${fs}px -apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif`; mctx.font = font;
+  const w = Math.max(h * 1.2, mctx.measureText(ref).width + pad * 2);
+  const [c, ctx] = canvas(w + 2 * DPR, h + 2 * DPR); ctx.font = font; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const p = ref[0];
+  let bg = '#FFFFFF', fg = '#1C1C1E', band = null;
+  if (kind === 'm') { bg = '#1E7B4A'; fg = '#FFFFFF'; band = p === 'G' ? '#D0202E' : p === 'S' ? '#F2B705' : null; }
+  else if (p === 'G') { bg = '#C8202E'; fg = '#FFFFFF'; }
+  else if (p === 'S') { bg = '#F2B705'; fg = '#1C1C1E'; }
+  ctx.fillStyle = '#FFFFFF'; rr(ctx, 0, 0, w + 2 * DPR, h + 2 * DPR, 4 * DPR); ctx.fill();
+  ctx.fillStyle = bg; rr(ctx, DPR, DPR, w, h, 3 * DPR); ctx.fill();
+  if (bg === '#FFFFFF') { ctx.strokeStyle = '#9A9AA0'; ctx.lineWidth = DPR; rr(ctx, 1.5 * DPR, 1.5 * DPR, w - DPR, h - DPR, 3 * DPR); ctx.stroke(); }
+  if (band) { ctx.save(); rr(ctx, DPR, DPR, w, h, 3 * DPR); ctx.clip(); ctx.fillStyle = band; ctx.fillRect(DPR, DPR, w, 3 * DPR); ctx.restore(); }
+  ctx.fillStyle = fg; ctx.fillText(ref, DPR + w / 2, DPR + h / 2 + (band ? 1.2 : 0.5) * DPR);
+  return img(c);
+}
+// airport: blue tile with a plane
+function makeAirport() {
+  const s = 18 * DPR, u = DPR; const [c, ctx] = canvas(s, s);
+  ctx.fillStyle = '#FFFFFF'; rr(ctx, 0, 0, s, s, 5 * u); ctx.fill();
+  ctx.fillStyle = '#1C7CF4'; rr(ctx, 1.2 * u, 1.2 * u, s - 2.4 * u, s - 2.4 * u, 4 * u); ctx.fill();
+  ctx.save(); ctx.translate(s / 2, s / 2); ctx.rotate(Math.PI / 4); ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath();
+  ctx.moveTo(0, -6 * u); ctx.quadraticCurveTo(1 * u, -6 * u, 1 * u, -4.5 * u); ctx.lineTo(1 * u, -1.2 * u); ctx.lineTo(5.5 * u, 1.3 * u); ctx.lineTo(5.5 * u, 2.4 * u);
+  ctx.lineTo(1 * u, 1 * u); ctx.lineTo(1 * u, 3.8 * u); ctx.lineTo(2.4 * u, 5 * u); ctx.lineTo(2.4 * u, 5.9 * u); ctx.lineTo(0, 5.1 * u);
+  ctx.lineTo(-2.4 * u, 5.9 * u); ctx.lineTo(-2.4 * u, 5 * u); ctx.lineTo(-1 * u, 3.8 * u); ctx.lineTo(-1 * u, 1 * u); ctx.lineTo(-5.5 * u, 2.4 * u); ctx.lineTo(-5.5 * u, 1.3 * u);
+  ctx.lineTo(-1 * u, -1.2 * u); ctx.lineTo(-1 * u, -4.5 * u); ctx.quadraticCurveTo(-1 * u, -6 * u, 0, -6 * u); ctx.fill(); ctx.restore();
+  return img(c);
+}
+const HSR_BADGE = '#2E63D6', RAIL_BADGE = '#8657D8';
+function addIcons(map, force = false) {
+  // add once; on a theme change update in place (same size), which keeps laid-out tiles valid
+  const set = (id, im) => { if (!map.hasImage(id)) map.addImage(id, im, { pixelRatio: DPR }); else if (force) map.updateImage(id, im); };
+  set('st-h', makeTrainIcon(HSR_BADGE)); set('st-r', makeTrainIcon(RAIL_BADGE));
+  set('dot-h', makeDot(P.hsr, 3.2, 1.7, P.stnFill)); set('dot-r', makeDot(P.rail, 2.8, 1.5, P.stnFill));
+  set('hub', makeDot(P.stnStroke, 4.2, 2, P.stnFill)); set('ap', makeAirport());
+}
+const STATIC_ICONS = new Set(['st-h', 'st-r', 'dot-h', 'dot-r', 'hub', 'ap']);
 
 // ---------------------------------------------------------------- helpers over data
 // line: [k, zh, en, ref, color, city, stations, branches, loop, lengthKm, connector]
@@ -327,7 +455,7 @@ function badgeText(l) {
 function badgeHTML(id, cls = '') {
   const l = D.lines[id];
   if (l[0] === 'h') return `<span class="badge hsr ${cls}" aria-hidden="true">HSR</span>`;
-  if (l[0] === 'r') return `<span class="badge rail ${cls}" aria-hidden="true">RL</span>`;
+  if (l[0] === 'r') return `<span class="badge rl ${cls}" aria-hidden="true">RL</span>`;
   const c = l[4] || '#888888'; const t = badgeText(l);
   return `<span class="badge ${t ? '' : 'round'} ${cls}" style="background:${c};color:${textOn(c)}" aria-hidden="true">${esc(t)}</span>`;
 }
@@ -381,28 +509,29 @@ const CLOSE = '<button class="ibtn" data-act="close" aria-label="Close"><svg vie
 
 function renderHome() {
   view.stack = [];
-  const nMetro = D.lines.filter(l => 'mlstf'.includes(l[0])).length;
+  const nMetro = D.lines.filter(l => 'mlstf'.includes(l[0]) && !l[10]).length;
   const nHsr = D.lines.filter(l => l[0] === 'h' && !l[10]).length;
   const nRail = D.lines.filter(l => l[0] === 'r' && !l[10]).length;
-  const nSt = D.stations.length;
+  const nSt = D.stations.filter(s => s[5].some(i => !D.lines[i][10])).length;
   const cities = D.cities.map((c, i) => [i, c]).filter(([i, c]) => c[5] > 0).sort((a, b) => b[1][5] - a[1][5] || b[1][4] - a[1][4]);
   let h = `<div class="stats"><div><b>${nMetro}</b><span>urban lines</span></div><div><b>${nHsr + nRail}</b><span>intercity lines</span></div><div><b>${nSt.toLocaleString()}</b><span>stations</span></div></div>`;
   h += `<div class="opts"><span>Labels</span><div class="seg" role="group" aria-label="Label language">` +
     ['en', 'both', 'zh'].map(m => `<button data-lab="${m}" aria-pressed="${labelMode === m}">${m === 'en' ? 'English' : m === 'zh' ? '中文' : 'Both'}</button>`).join('') + `</div></div>`;
   h += `<div class="sec">Key</div><div class="legend">
     <i style="background:var(--hsr);height:5px"></i><span>High-speed railway</span>
-    <i class="dash"></i><span>Conventional railway</span>
+    <i style="background:var(--rail)"></i><span>Conventional railway</span>
+    <i class="track"></i><span>Other track (freight, depots, links)</span>
     <i style="background:linear-gradient(90deg,#E4002B 0 25%,#0057B8 25% 50%,#009A44 50% 75%,#F2A900 75%)"></i><span>Metro and light rail, in official line colours</span></div>`;
   h += `<div class="sec">Cities with urban rail · ${cities.length}</div>`;
   for (const [i, c] of cities) {
     h += `<button class="row" data-city="${i}">${ICON_CITY}<span class="t"><b>${esc(c[1] || c[0])}</b><span>${esc(c[0])}</span></span><span class="n">${c[5]} line${c[5] > 1 ? 's' : ''}</span></button>`;
   }
-  h += `<div class="note">Data from OpenStreetMap, extracted 25 Sep 2026. Lines appear as mapped there; recently opened or reorganised services may differ from timetables.</div>`;
+  h += `<div class="note">Data from OpenStreetMap, extracted 25 Sep 2026, with depot tracks, bridges, duplicate and non-passenger relations removed. Lines appear as mapped there; recently opened or reorganised services may differ from timetables.</div>`;
   setBody(h);
 }
 function renderCity(ci, push = true) {
   const c = D.cities[ci];
-  const ids = sortLines(D.lines.map((l, i) => i).filter(i => D.lines[i][5] === ci));
+  const ids = sortLines(D.lines.map((l, i) => i).filter(i => D.lines[i][5] === ci && !D.lines[i][10]));
   const groups = { m: [], s: [], l: [], t: [], f: [] };
   for (const i of ids) (groups[D.lines[i][0]] || (groups[D.lines[i][0]] = [])).push(i);
   let h = BACK + `<div class="dhead">${ICON_CITY.replace('ico city', 'ico city" style="width:34px;height:34px;border-radius:9px')}<div><h2>${esc(c[1] || c[0])}</h2><div class="zh">${esc(c[0])}</div><div class="meta">${ids.length} urban rail line${ids.length > 1 ? 's' : ''}</div></div>${CLOSE}</div>`;
@@ -445,7 +574,7 @@ function stopList(st, col, lineId, loop) {
     const urb = other.filter(x => 'mlstf'.includes(D.lines[x][0]));
     const inter = other.filter(x => 'hr'.includes(D.lines[x][0]));
     let tx = urb.slice(0, 6).map(x => badgeHTML(x, 'sm')).join('');
-    if (inter.length) tx += `<span class="badge sm ${inter.some(x => D.lines[x][0] === 'h') ? 'hsr' : 'rail'}" title="Rail connection">🚆︎</span>`.replace('🚆︎', '<svg viewBox="0 0 10 10" width="10" height="10" fill="currentColor"><rect x="2.3" y="0.8" width="5.4" height="6.4" rx="1.4"/><rect x="3.1" y="1.8" width="3.8" height="2" fill="#0003"/><path d="M3 7.6 2 9.4M7 7.6 8 9.4" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>');
+    if (inter.length) tx += `<span class="badge sm ${inter.some(x => D.lines[x][0] === 'h') ? 'hsr' : 'rl'}" title="Rail connection">🚆︎</span>`.replace('🚆︎', '<svg viewBox="0 0 10 10" width="10" height="10" fill="currentColor"><rect x="2.3" y="0.8" width="5.4" height="6.4" rx="1.4"/><rect x="3.1" y="1.8" width="3.8" height="2" fill="#0003"/><path d="M3 7.6 2 9.4M7 7.6 8 9.4" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>');
     const x = other.length > 0;
     h += `<li class="stop${x ? ' x' : ''}" data-stn="${si}" tabindex="0"><span class="rail"></span><span class="st"><b>${esc(stnName(s))}</b>${s[1] && s[1] !== s[0] ? `<span>${esc(s[0])}</span>` : ''}</span><span class="tx">${tx}</span></li>`;
   }
@@ -496,6 +625,7 @@ function buildIndex() {
   D.lines.forEach((l, i) => { if (l[10]) return; IDX.push({ t: 'l', i, a: norm(l[2]), b: norm(l[1]), c: norm(cityName(l[5])), r: norm(l[3]) }); });
   const seen = new Map();
   D.stations.forEach((s, i) => {
+    if (!s[5].some(x => !D.lines[x][10])) return;
     const key = s[0] + '|' + s[4] + '|' + Math.round(s[2] * 20) + '|' + Math.round(s[3] * 20);
     if (seen.has(key)) return; seen.set(key, i);
     IDX.push({ t: 's', i, a: norm(s[1]), b: norm(s[0]) });
@@ -579,7 +709,7 @@ function showStation(si, { fly = true } = {}) {
 }
 function flyCity(ci) {
   const c = D.cities[ci];
-  const ids = D.lines.map((l, i) => i).filter(i => D.lines[i][5] === ci);
+  const ids = D.lines.map((l, i) => i).filter(i => D.lines[i][5] === ci && !D.lines[i][10]);
   let a = null;
   for (const id of ids) { const b = lineBounds(id); if (!b) continue; a = a ? [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])] : b; }
   if (a) map.fitBounds([[a[0], a[1]], [a[2], a[3]]], { padding: padding(), maxZoom: 13, duration: 900 });
@@ -634,6 +764,8 @@ async function boot() {
   try { const lm = localStorage.getItem('cra-lab'); if (lm) labelMode = lm; } catch (_) {}
   const [m, d] = await Promise.all([fetch('data/manifest.json').then(r => r.json()), fetch('data/network.json').then(r => r.json())]);
   manifest = m; D = d;
+  for (const c of D.cities) c[5] = 0;
+  for (const l of D.lines) if (!l[10] && 'mlstf'.includes(l[0]) && D.cities[l[5]]) D.cities[l[5]][5]++;
   buildIndex(); renderChips(); renderHome();
   if (innerWidth <= 640) $('#panel').classList.add('min');
   map = window.__map = new maplibregl.Map({
@@ -647,7 +779,20 @@ async function boot() {
     if (id.startsWith('b|')) {
       const [, color, text] = id.split('|');
       if (!map.hasImage(id)) map.addImage(id, makeBadge(color || '#888888', text || ''), { pixelRatio: DPR });
-    } else if (id === 'st-h' || id === 'st-r') addIcons(map);
+    } else if (id.startsWith('bs|')) {
+      if (!map.hasImage(id)) map.addImage(id, makeBulletRow(+id.slice(3)), { pixelRatio: DPR });
+    } else if (id.startsWith('sh|')) {
+      const [, kind, ref] = id.split('|');
+      if (!map.hasImage(id)) map.addImage(id, makeShield(kind, ref || ''), { pixelRatio: DPR });
+    } else if (id.startsWith('sd|')) {
+      const [, t, col] = id.split('|');
+      if (!map.hasImage(id)) map.addImage(id, makeDot(col, 5, 2.1, t === 'D' ? PAL.dark.stnFill : PAL.light.stnFill), { pixelRatio: DPR });
+    } else if (id.startsWith('hubm|')) {
+      const t = id.slice(5), pal = t === 'D' ? PAL.dark : PAL.light;
+      if (!map.hasImage(id)) map.addImage(id, makeDot(pal.stnStroke, 6.2, 2.3, pal.stnFill), { pixelRatio: DPR });
+    } else if (id.startsWith('pc|')) {
+      if (!map.hasImage(id)) map.addImage(id, makePoiDot((POI_COLORS[id.slice(3)] || POI_COLORS.other)[0]), { pixelRatio: DPR });
+    } else if (STATIC_ICONS.has(id)) addIcons(map);
   });
   if (innerWidth <= 640 && !/[#&]view=/.test(location.hash)) map.jumpTo({ center: [110.5, 31.5], zoom: 3 });
   map.on('load', () => { addIcons(map); $('#loading').classList.add('done'); });
@@ -674,7 +819,7 @@ async function boot() {
       if (!ls.length && f.properties.l >= 0) ids.add(f.properties.l);
     }
     let arr = [...ids].filter(i => D.lines[i]);
-    const real = arr.filter(i => !D.lines[i][10]); if (real.length) arr = real;
+    arr = arr.filter(i => !D.lines[i][10]);
     if (sel != null && arr.includes(sel) && arr.length > 1) arr = arr.filter(i => i !== sel).concat([sel]);
     if (!arr.length) { if (sel != null || selStation != null) { clearSelection(); view.stack = []; $('#q').value = ''; $('#qclear').classList.remove('show'); renderHome(); } return; }
     view.stack = [];
@@ -682,7 +827,7 @@ async function boot() {
     else renderChooser(arr);
   });
   // theme changes
-  const reTheme = () => { const want = isDark() ? PAL.dark : PAL.light; if (want !== P) { P = want; applyStyle(); addIcons(map); } };
+  const reTheme = () => { const want = isDark() ? PAL.dark : PAL.light; if (want !== P) { P = want; applyStyle(); addIcons(map, true); } };
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', reTheme);
   new MutationObserver(reTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 }
