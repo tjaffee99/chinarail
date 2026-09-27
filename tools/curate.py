@@ -69,6 +69,28 @@ for s in S:
         en = py(s[0])
     s[1] = en
 
+# one English spelling per station: "Fangshandong" / "Fangshan Dong" / "Fangshan East" -> "Fangshan East"
+DIRWORD = {'Dong': 'East', 'Xi': 'West', 'Nan': 'South', 'Bei': 'North'}
+for s in S:
+    en, zh = s[1] or '', s[0]
+    if len(zh) >= 3 and zh[-1] in DIR:
+        m = re.fullmatch(r"(.+?) ?(Dong|Xi|Nan|Bei)", en, re.I)
+        if m and m.group(2).capitalize() in DIRWORD and DIRWORD[m.group(2).capitalize()] == DIR[zh[-1]]:
+            base = m.group(1)
+            en = (base[:1].upper() + base[1:]) + ' ' + DIR[zh[-1]]
+    en = re.sub(r'(?<=[LlNn])v(?=[a-z]|$)', 'ü', en) if re.search(r'[\u4e00-\u9fff]', zh) and re.search(r'[LlNn]v', en) else en
+    s[1] = en
+by_name = {}
+for i, s in enumerate(S): by_name.setdefault(s[0], []).append(i)
+for zh, ids in by_name.items():
+    if len(ids) < 2: continue
+    for i in ids:     # nodes of the same station (same name within 3 km) share the most common spelling
+        grp = [j for j in ids if abs(S[j][2] - S[i][2]) < 0.03 and abs(S[j][3] - S[i][3]) < 0.03]
+        names = [S[j][1] for j in grp if S[j][1]]
+        if len(set(names)) > 1:
+            best = max(set(names), key=lambda n: (names.count(n), ' ' in n, -len(n)))
+            for j in grp: S[j][1] = best
+
 # ---------------------------------------------------------------- hide non-routes
 NONROUTE = re.compile(r'特大桥|大桥|隧道|动车段|动车所|动车走行|车辆段|机务段|出入段|出入库|出入场|停车场|联络线|联线|疏解|'
                       r'走行线|绕行线|直通线|发车线|立折线|折返线|货车|货运|货线|专用线|附属线|下联线|上联线|进港|港口|码头|'

@@ -37,14 +37,20 @@ This is a passenger rail atlas. `tools/curate.py` cleans `data/network.json`, th
   yard tracks (动车段/动车所/走行线), bridges mapped as lines (特大桥), connectors and reversing
   spurs (联络线/疏解线/直通线/立折线), lines outside China, duplicate relations (e.g. Batong Line,
   now part of Line 1), and stubs with fewer than two mapped stops. Their track is not drawn.
-- **Line ends:** track that runs past a line's terminal stop (tail tracks, unopened
-  extensions) is cut at the stop. It is cut only where the track dead-ends within 3 km (urban)
-  or 5 km (intercity). Track that keeps going is left alone, because it usually means OSM is
-  missing a stop.
+- **Line geometry:** `build_tiles.py` assembles each line's track from the finest tiles and
+  fixes where the OSM relation and its stop list disagree. Track past a line's end stop
+  (tail tracks, depot runs, unopened extensions) is cut at the stop. If an intercity line's
+  track ends at a major station missing from its stop list, that station becomes the
+  terminus (e.g. Beijing–Guangzhou now starts at Beijing Fengtai). If a line has no track of
+  its own between two stops, it is routed along the rail network (shortest path) and that
+  track is drawn as part of the line (e.g. Beijing–Hong Kong between Lushan and Nanchang
+  East). The updated stop lists are written back to `data/network.json`.
 - **Stop order:** lists that OSM has out of order are re-sequenced, and intercity lines are
   listed in the order their name reads (Beijing–Shanghai starts at Beijing).
 - **Station complexes:** a railway station and the metro stations built into it (OSM
   transfers, or metro within 400 m) are one place, with one label, one panel and all lines.
+- **Station names:** one spelling per station (e.g. "Fangshandong" and "Fangshan East" both become
+  "Fangshan East").
 - **English names:** hand-checked names for high-speed, trunk and named urban lines
   (`tools/names.py`); "N号线" becomes "Line N"; auto-romanised pinyin is re-spelled word by
   word.
@@ -58,7 +64,9 @@ python3 tools/build_tiles.py
 ## Operator logos
 
 `data/logos.json` maps each operator to its logo on Wikimedia Commons / Wikipedia. The page
-loads the logos straight from `upload.wikimedia.org`. The file names come from Wikimedia
+loads the logos straight from `upload.wikimedia.org`. For operators not in that file, the page
+reads the `logo` field of the operator's Wikipedia infobox through the public API and caches
+the result in the browser for 30 days. The file names come from Wikimedia
 search results; any logo that fails to load is simply left out. China Railway's logo is
 used as the rail station icon on the map, with a drawn train icon as the fallback.
 

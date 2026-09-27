@@ -510,6 +510,39 @@ function allLinesAt(si) {
   for (const m of complexOf(si).members) { for (const l of D.stations[m][5]) set.add(l); for (const t of D.stations[m][6]) for (const l of D.stations[t][5]) set.add(l); }
   return [...set];
 }
+// Operators without a logo in data/logos.json: look it up from the logo field of the operator's
+// Wikipedia infobox (public API, CORS via origin=*), and remember the answer for 30 days.
+const WIKI_TITLES = {
+  Wuhan: 'Wuhan Metro', Chongqing: 'Chongqing Rail Transit', Hefei: 'Hefei Metro', Shenyang: 'Shenyang Metro', Changchun: 'Changchun Rail Transit',
+  Nanchang: 'Nanchang Metro', Nanning: 'Nanning Metro', Guiyang: 'Guiyang Metro', 'Ürümqi': 'Ürümqi Metro', Hohhot: 'Hohhot Metro',
+  Xuzhou: 'Xuzhou Metro', Changzhou: 'Changzhou Metro', Luoyang: 'Luoyang Metro', Wuhu: 'Wuhu Rail Transit', Shaoxing: 'Shaoxing Metro',
+  Nantong: 'Nantong Metro', Wenzhou: 'Wenzhou Rail Transit', Jinhua: 'Jinhua Rail Transit', Taizhou: 'Taizhou Rail Transit', Lanzhou: 'Lanzhou Metro',
+  Liuzhou: 'Liuzhou Rail Transit', Sanya: 'Sanya Tram', Tianshui: 'Tianshui Tram', Huangshi: 'Huangshi Modern Tram', Jiaxing: 'Jiaxing Tram',
+  Mengzi: 'Honghe Tram',
+};
+const WIKI_API = 'https://en.wikipedia.org/w/api.php?origin=*&format=json&formatversion=2&';
+async function wikiLogo(title) {
+  const p = await fetch(WIKI_API + 'action=parse&prop=wikitext&section=0&redirects=1&page=' + encodeURIComponent(title)).then(r => r.json());
+  const wt = (p.parse && p.parse.wikitext) || '';
+  const m = /\|\s*logo\s*=\s*(?:\[\[)?\s*(?:File:|Image:)?\s*([^|\]\n{}=]+?\.(?:svg|png|jpe?g|gif))/i.exec(wt);
+  if (!m) return '';
+  const q = await fetch(WIKI_API + 'action=query&prop=imageinfo&iiprop=url&iiurlwidth=120&titles=' + encodeURIComponent('File:' + m[1].trim())).then(r => r.json());
+  const pg = q.query && q.query.pages && q.query.pages[0], ii = pg && pg.imageinfo && pg.imageinfo[0];
+  return ii ? (ii.thumburl || ii.url || '') : '';
+}
+async function resolveMissingLogos() {
+  let cache = {};
+  try { const c = JSON.parse(localStorage.getItem('cra-logos') || '{}'); if (c.t > Date.now() - 30 * 864e5) cache = c.m || {}; } catch (_) {}
+  const want = [...new Set(D.lines.filter(l => !l[10] && 'mlstf'.includes(l[0])).map(l => cityName(l[5])))].filter(c => c && !LOGOS[c] && WIKI_TITLES[c]);
+  let changed = false;
+  await Promise.all(want.map(async c => {
+    let url = cache[c];
+    if (url === undefined) { try { url = await wikiLogo(WIKI_TITLES[c]); } catch (_) { return; } cache[c] = url; }
+    if (url) { LOGOS[c] = { name: WIKI_TITLES[c], url }; changed = true; }
+  }));
+  try { localStorage.setItem('cra-logos', JSON.stringify({ t: Date.now(), m: cache })); } catch (_) {}
+  if (changed && !view.stack.length && !$('#q').value.trim()) renderHome();
+}
 // operators and their logos (data/logos.json: Wikimedia Commons / Wikipedia images)
 let LOGOS = {};
 const logoReady = {};
@@ -521,6 +554,14 @@ function operatorOf(id) {
   if (l[1].includes('香港電車')) return 'hktram';
   if (l[1].includes('城际') && GD_CITIES.has(city)) return 'prdir';
   return city;
+}
+const OP_NAME = { cr: 'China Railway', hktram: 'Hong Kong Tramways', prdir: 'Guangdong Intercity' };
+function operatorsHTML(ids) {
+  const ops = [...new Set(ids.map(operatorOf))].filter(Boolean).sort((a, b) => (b === 'cr') - (a === 'cr'));
+  return ops.map(k => {
+    const lg = LOGOS[k], name = lg ? lg.name : (OP_NAME[k] || (k + ' ' + 'Metro'));
+    return `<span class="op">${lg ? `<img src="${esc(lg.url)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}${esc(name)}</span>`;
+  }).join('');
 }
 function logosHTML(ids, cls = '') {
   const ops = [...new Set(ids.map(operatorOf))].filter(k => LOGOS[k]);
@@ -599,8 +640,7 @@ function renderLine(id, push = true) {
   const l = D.lines[id]; const col = lineColor(id);
   const kind = KNAME[l[0]];
   const meta = [kind, l[0] === 'h' || l[0] === 'r' ? '' : cityName(l[5]), l[6].length ? `${l[6].length} stations` : '', l[9] ? `${l[9].toLocaleString()} km` : ''].filter(Boolean).join(' · ');
-  let h = (view.stack.length ? BACK : '') + `<div class="dhead">${badgeHTML(id)}<div><h2>${esc(lineTitle(id))}</h2><div class="zh">${esc(l[1])}</div><div class="meta">${esc(meta)}</div>${termini(id) ? `<div class="meta">${esc(termini(id))}</div>` : ''}</div>${CLOSE}</div>`;
-  const lg = logosHTML([id]); if (lg) h += `<div class="logos">${lg}</div>`;
+  let h = (view.stack.length ? BACK : '') + `<div class="dhead">${badgeHTML(id)}<div><h2>${esc(lineTitle(id))}</h2><div class="zh">${esc(l[1])}</div><div class="meta">${esc(meta)}</div>${termini(id) ? `<div class="meta">${esc(termini(id))}</div>` : ''}<div class="ops">${operatorsHTML([id])}</div></div>${CLOSE}</div>`;
   if (!l[6].length) h += `<div class="note">OpenStreetMap has no station data for this line.</div>`;
   h += stopList(l[6], col, id, !!l[8]);
   for (const br of l[7]) {
@@ -634,9 +674,7 @@ function renderStation(si, push = true) {
   const lines = sortLines([...new Set(members.flatMap(m => D.stations[m][5]))].filter(i => !D.lines[i][10]));
   const kinds = [...new Set(lines.map(i => D.lines[i][0]))].sort((a, b) => 'hrmslft'.indexOf(a) - 'hrmslft'.indexOf(b));
   const kindText = kinds.map(k => STN_KIND[k]).filter(Boolean).join(' · ') + (s[4] === 'h' || s[4] === 'r' ? ' station' : '');
-  const logos = logosHTML(lines);
-  let h = (view.stack.length ? BACK : '') + `<div class="dhead"><span class="ico stn" style="border-color:${s[4] === 'h' ? 'var(--hsr)' : s[4] === 'r' ? 'var(--rail)' : '#2C2C2E'}"></span><div><h2>${esc(stnName(s))}</h2>${s[1] && s[1] !== s[0] ? `<div class="zh">${esc(s[0])}</div>` : ''}<div class="meta">${esc(kindText)}</div></div>${CLOSE}</div>`;
-  if (logos) h += `<div class="logos">${logos}</div>`;
+  let h = (view.stack.length ? BACK : '') + `<div class="dhead"><span class="ico stn" style="border-color:${s[4] === 'h' ? 'var(--hsr)' : s[4] === 'r' ? 'var(--rail)' : '#2C2C2E'}"></span><div><h2>${esc(stnName(s))}</h2>${s[1] && s[1] !== s[0] ? `<div class="zh">${esc(s[0])}</div>` : ''}<div class="meta">${esc(kindText)}</div><div class="ops">${operatorsHTML(lines)}</div></div>${CLOSE}</div>`;
   const rail = lines.filter(i => 'hr'.includes(D.lines[i][0])), urban = lines.filter(i => !'hr'.includes(D.lines[i][0]));
   if (rail.length) { h += `<div class="sec">Rail</div>`; for (const i of rail) h += lineRow(i, false); }
   if (urban.length) {
@@ -867,7 +905,7 @@ async function boot() {
     } else if (STATIC_ICONS.has(id)) addIcons(map);
   });
   if (innerWidth <= 640 && !/[#&]view=/.test(location.hash)) map.jumpTo({ center: [110.5, 31.5], zoom: 3 });
-  map.on('load', () => { addIcons(map); loadRailLogo(); $('#loading').classList.add('done'); });
+  map.on('load', () => { addIcons(map); loadRailLogo(); resolveMissingLogos(); $('#loading').classList.add('done'); });
   map.on('rotate', () => { $('#compass svg').style.transform = `rotate(${-map.getBearing()}deg)`; });
   const railLayers = ['u-m', 'u-s', 'u-l', 'u-t', 'u-f', 'rail-h', 'rail-r', 'sel-line'];
   const stnLayers = ['stn-u', 'stn-u1', 'stn-rail', 'sel-stn'];

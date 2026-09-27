@@ -152,3 +152,6 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .ico.clogo img{width:22px;height:22px;object-fit:contain}
 .ico.clogo.big{width:40px;height:40px;border-radius:10px}
 .ico.clogo.big img{width:32px;height:32px}
+.ops{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px}
+.op{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2)}
+.op img{height:18px;width:auto;max-width:40px;object-fit:contain;border-radius:3px}
