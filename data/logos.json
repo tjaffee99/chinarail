@@ -114,5 +114,9 @@
  "prdir": {
   "name": "Guangdong Intercity",
   "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/PRDIR_logo_without_text.svg/120px-PRDIR_logo_without_text.svg.png"
+ },
+ "Foshan": {
+  "name": "Foshan Metro",
+  "url": "https://upload.wikimedia.org/wikipedia/en/thumb/8/89/FMetro.svg/120px-FMetro.svg.png"
  }
 }
