@@ -145,6 +145,31 @@ def two_opt(p):
                 if d1 < d0 - 1e-9:
                     p[a + 1:b + 1] = reversed(p[a + 1:b + 1]); improved = True
     return p
+def or_opt(p):
+    """Move runs of 1-3 stops (either way round) to wherever they fit best."""
+    p = list(p); improved = True
+    def cost(q): return plen(q)
+    while improved:
+        improved = False
+        base = cost(p)
+        for k in (1, 2, 3):
+            for a in range(len(p) - k + 1):
+                seg = p[a:a + k]; rest = p[:a] + p[a + k:]
+                for b in range(len(rest) + 1):
+                    if b == a: continue
+                    for sg in (seg, seg[::-1]):
+                        q = rest[:b] + sg + rest[b:]
+                        c = cost(q)
+                        if c < base - 1e-9: p, base, improved = q, c, True; break
+                    if improved: break
+                if improved: break
+            if improved: break
+    return p
+def resequence(p):
+    prev = None
+    while prev != p:
+        prev = p; p = or_opt(two_opt(p))
+    return p
 def shortest(seq):
     pts = list(dict.fromkeys(seq)); best = None
     for start in pts:
@@ -152,13 +177,13 @@ def shortest(seq):
         while rem:
             n = min(rem, key=lambda r: dist(p[-1], r)); p.append(n); rem.discard(n)
         if best is None or plen(p) < plen(best): best = p
-    return two_opt(best)
+    return resequence(best)
 reordered = 0
 for l in L:
     if l[10] or l[8] or len(l[6]) < 4 or len(l[6]) > 150: continue
     seq = list(dict.fromkeys(l[6]))
-    local = two_opt(seq)                      # fixes local reversals, keeps OSM's overall order
-    if plen(local) < 0.97 * plen(seq): seq = local
+    local = resequence(seq)                   # fixes local reversals and strays, keeps OSM's overall order
+    if (plen(seq) - plen(local)) * 111 > 0.3: seq = local
     b = shortest(seq)                          # badly scrambled lists: rebuild from scratch
     if plen(seq) > 1.2 * plen(b): seq = b
     if seq != l[6]:

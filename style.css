@@ -147,3 +147,8 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
 .badge.lgw{background:#fff!important;box-shadow:0 0 0 1px var(--panel-edge);padding:0 2px}
 .badge.lgw svg{display:none}
 .badge.lgw img{height:14px;width:auto;display:block}
+.ico.cnone{width:28px;height:28px}
+.ico.clogo{width:28px;height:28px;border-radius:7px;background:#fff;box-shadow:0 0 0 1px var(--panel-edge);overflow:hidden}
+.ico.clogo img{width:22px;height:22px;object-fit:contain}
+.ico.clogo.big{width:40px;height:40px;border-radius:10px}
+.ico.clogo.big img{width:32px;height:32px}

@@ -283,7 +283,6 @@ function buildStyle() {
   L.push({ id: 'sel-stn-label', type: 'symbol', source: 'rail', 'source-layer': 'stn', filter: selF,
     layout: { 'text-field': nameField(), 'text-font': ['NotoSansMedium'], 'text-size': ['interpolate', ['linear'], ['zoom'], 6, 11, 16, 14], 'text-variable-anchor': ['left', 'right', 'top', 'bottom'], 'text-radial-offset': 0.9, 'text-justify': 'auto', 'text-max-width': 10, 'text-line-height': 1.15, 'symbol-sort-key': ['-', 0, ['get', 'rk']] },
     paint: { 'text-color': P.label, 'text-halo-color': P.halo, 'text-halo-width': 1.8 } });
-  L.push({ id: 'sel-pt', type: 'circle', source: 'selpt', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 7, 14, 12, 17, 16], 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-color': P.sel, 'circle-stroke-width': 3 } });
   // ---- base map labels
   const halo = { 'text-halo-color': P.halo, 'text-halo-width': 1.5 };
   const waterName = (id, geom, extra) => ({ ...B, id, type: 'symbol', 'source-layer': 'water_name', filter: ['==', ['geometry-type'], geom], ...extra,
@@ -330,7 +329,6 @@ function buildStyle() {
     sources: {
       base: { type: 'vector', url: OFM + '/planet' },
       rail: { type: 'vector', tiles: ['tp://rail/{z}/{x}/{y}'], minzoom: 3, maxzoom: 12, bounds: [72, 16, 136.6, 54.6] },
-      selpt: { type: 'geojson', data: { type: 'FeatureCollection', features: selStation == null || !D ? [] : [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [D.stations[selStation][2], D.stations[selStation][3]] } }] } },
     },
     layers: L,
   };
@@ -547,7 +545,12 @@ function setBody(html, expand) {
   body.innerHTML = html; body.scrollTop = 0; $('#phead').classList.remove('scrolled');
 }
 body.addEventListener('scroll', () => $('#phead').classList.toggle('scrolled', body.scrollTop > 2));
-const ICON_CITY = '<span class="ico city"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 14V7l4-2v2l4-2v9zm9 0V3h3v11z"/></svg></span>';
+// the city's metro operator logo, or an empty slot (keeps the names aligned) when there isn't one
+function cityIcon(ci, big = false) {
+  const c = D.cities[ci], lg = c && LOGOS[c[1]];
+  if (!lg) return big ? '' : '<span class="ico cnone" aria-hidden="true"></span>';
+  return `<span class="ico clogo${big ? ' big' : ''}"><img src="${esc(lg.url)}" alt="${esc(lg.name)}" title="${esc(lg.name)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></span>`;
+}
 const BACK = '<button class="back" data-act="back"><svg viewBox="0 0 9 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 1.5 2 7l5.5 5.5"/></svg>Back</button>';
 const CLOSE = '<button class="ibtn" data-act="close" aria-label="Close"><svg viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg></button>';
 
@@ -567,7 +570,7 @@ function renderHome() {
     <i style="background:linear-gradient(90deg,#E4002B 0 25%,#0057B8 25% 50%,#009A44 50% 75%,#F2A900 75%)"></i><span>Metro and light rail, in official line colours</span></div>`;
   h += `<div class="sec">Cities with urban rail · ${cities.length}</div>`;
   for (const [i, c] of cities) {
-    h += `<button class="row" data-city="${i}">${ICON_CITY}<span class="t"><b>${esc(c[1] || c[0])}</b><span>${esc(c[0])}</span></span><span class="n">${c[5]} line${c[5] > 1 ? 's' : ''}</span></button>`;
+    h += `<button class="row" data-city="${i}">${cityIcon(i)}<span class="t"><b>${esc(c[1] || c[0])}</b><span>${esc(c[0])}</span></span><span class="n">${c[5]} line${c[5] > 1 ? 's' : ''}</span></button>`;
   }
   h += `<div class="note">Data from OpenStreetMap, extracted 25 Sep 2026, with depot tracks, bridges, duplicate and non-passenger relations removed. Lines appear as mapped there; recently opened or reorganised services may differ from timetables.</div>`;
   setBody(h);
@@ -577,7 +580,7 @@ function renderCity(ci, push = true) {
   const ids = sortLines(D.lines.map((l, i) => i).filter(i => D.lines[i][5] === ci && !D.lines[i][10]));
   const groups = { m: [], s: [], l: [], t: [], f: [] };
   for (const i of ids) (groups[D.lines[i][0]] || (groups[D.lines[i][0]] = [])).push(i);
-  let h = BACK + `<div class="dhead">${ICON_CITY.replace('ico city', 'ico city" style="width:34px;height:34px;border-radius:9px')}<div><h2>${esc(c[1] || c[0])}</h2><div class="zh">${esc(c[0])}</div><div class="meta">${ids.length} urban rail line${ids.length > 1 ? 's' : ''}</div></div>${CLOSE}</div>`;
+  let h = BACK + `<div class="dhead">${cityIcon(ci, true)}<div><h2>${esc(c[1] || c[0])}</h2><div class="zh">${esc(c[0])}</div><div class="meta">${ids.length} urban rail line${ids.length > 1 ? 's' : ''}</div></div>${CLOSE}</div>`;
   const GN = { m: 'Metro', s: 'Suburban & airport rail', l: 'Light rail, monorail & maglev', t: 'Tram', f: 'Funicular' };
   for (const k of ['m', 's', 'l', 't', 'f']) {
     if (!groups[k].length) continue;
@@ -712,7 +715,7 @@ function renderResults(q) {
   let h = '';
   for (const e of res) {
     if (e.t === 'l') h += lineRow(e.i);
-    else if (e.t === 'c') { const c = D.cities[e.i]; h += `<button class="row" data-city="${e.i}">${ICON_CITY}<span class="t"><b>${esc(c[1] || c[0])}</b><span>${esc(c[0])} · ${c[5]} lines</span></span></button>`; }
+    else if (e.t === 'c') { const c = D.cities[e.i]; h += `<button class="row" data-city="${e.i}">${cityIcon(e.i)}<span class="t"><b>${esc(c[1] || c[0])}</b><span>${esc(c[0])} · ${c[5]} lines</span></span></button>`; }
     else {
       const s = D.stations[e.i];
       const ls = sortLines(allLinesAt(e.i).filter(x => !D.lines[x][10]));
