@@ -12,7 +12,7 @@ Only track used by a listed (visible) line is drawn. Layers and properties:
 Archive: chunks of tiles ("TPK1" + index + gzipped MVT), z<=7 in one chunk, deeper zooms
 grouped by their z6 ancestor; see app.js getTile().
 """
-import gzip, json, math, os, pickle, struct, sys
+import gzip, json, math, os, pickle, re, struct, sys
 from collections import defaultdict
 import mapbox_vector_tile
 from shapely.geometry import LineString, MultiLineString, box, Point
@@ -90,23 +90,98 @@ for li, ways in enumerate(GEOM):
             filled += 1
 print('gaps between stops routed along the rail network:', filled)
 
-groups = defaultdict(list)
-for w, ls in way_lines.items(): groups[frozenset(ls)].append(w)
+# Join each intercity line's track into one piece: from every piece, search the rail network
+# (station tracks and sidings included) for the nearest other piece of the same line, within
+# 15 km of track, and draw the path as part of the line. A piece that can't be joined and has
+# no station on it is left out, so no line stops dead in open country.
+adj_all = defaultdict(list)
+for w, v in WAYS.items():
+    c, t, refs = v
+    if t.get('railway') not in ('rail', 'narrow_gauge'): continue
+    f = 1.5 if t.get('service') else 1.0
+    for (n1, p1), (n2, p2) in zip(zip(refs, c), zip(refs[1:], c[1:])):
+        d = float(np.hypot(*(mxy(*p1) - mxy(*p2)))) * f
+        adj_all[n1].append((n2, d, w)); adj_all[n2].append((n1, d, w))
+def pieces(ws):
+    par = {}
+    def f(x):
+        while par.get(x, x) != x:
+            par[x] = par.get(par[x], par[x]); x = par[x]
+        return x
+    for w in ws:
+        r = WAYS[w][2]; a = f(r[0])
+        for n in r[1:]:
+            b = f(n)
+            if a != b: par[b] = a
+    out = defaultdict(set)
+    for w in ws: out[f(WAYS[w][2][0])].add(w)
+    return list(out.values())
+def join(src_nodes, dst_nodes, cutoff):
+    dist = {n: 0.0 for n in src_nodes}; prev = {}; h = [(0.0, n) for n in src_nodes]
+    while h:
+        du, u = heapq.heappop(h)
+        if du > dist.get(u, 1e18) or du > cutoff: continue
+        if u in dst_nodes:
+            ws = set()
+            while u in prev: u, w = prev[u]; ws.add(w)
+            return ws
+        for v, d, w in adj_all.get(u, ()):
+            nd = du + d
+            if nd < dist.get(v, 1e18): dist[v] = nd; prev[v] = (u, w); heapq.heappush(h, (nd, v))
+    return None
+joined = dropped = 0
+line_ways = defaultdict(set)
+for w, ls in way_lines.items():
+    for li in ls: line_ways[li].add(w)
+for li, ws in list(line_ways.items()):
+    if L[li][0] not in 'hr': continue
+    ps = pieces(ws)
+    stuck = []
+    while len(ps) > 1:
+        ps.sort(key=len)
+        a = ps[0]; rest = set().union(*ps[1:])
+        path = join({n for w in a for n in WAYS[w][2]}, {n for w in rest for n in WAYS[w][2]}, 15000)
+        if path is None:
+            stuck.append(ps.pop(0)); continue
+        for w in path: way_lines[w].add(li)
+        ws |= path; joined += 1
+        ps = pieces(set().union(*ps) | path)
+    stops = np.array([mxy(S[x][2], S[x][3]) for x in L[li][6]]) if L[li][6] else np.zeros((0, 2))
+    for a in stuck:
+        P = np.array([mxy(*p) for w in a for p in WAYS[w][0]])
+        if len(stops) and any(np.hypot(*(P - q).T).min() < 1500 for q in stops): continue
+        for w in a:
+            way_lines[w].discard(li)
+            if not way_lines[w]: del way_lines[w]
+        dropped += 1
+print('line pieces joined along the rail network:', joined, '· stray pieces without a station left out:', dropped)
 
-def primary(ls):
+# Track shared by high-speed and conventional lines is drawn as what the track itself is
+# (highspeed=yes or a line speed of 200 km/h and up), so a conventional line running on its own
+# old track through a stretch it shares on paper with a high-speed relation stays purple.
+def fast_way(t):
+    m = re.match(r'\d+', t.get('maxspeed') or '')
+    return t.get('highspeed') == 'yes' or (m is not None and int(m.group()) >= 200)
+groups = defaultdict(list)
+for w, ls in way_lines.items():
+    kinds = {L[i][0] for i in ls}
+    wk = ('h' if fast_way(WAYS[w][1]) else 'r') if {'h', 'r'} <= kinds else None
+    groups[(frozenset(ls), wk)].append(w)
+
+def primary(ls, wk=None):
     kinds = [L[i][0] for i in ls]
     order = 'hrmslft'
-    k = min(kinds, key=order.index) if any(x in 'hr' for x in kinds) else max(set(kinds), key=kinds.count)
+    k = wk or (min(kinds, key=order.index) if any(x in 'hr' for x in kinds) else max(set(kinds), key=kinds.count))
     same = [i for i in ls if L[i][0] == k]
     return max(same, key=lambda i: (L[i][9] or 0, len(L[i][6]))), k
 
 features = []   # (merc geometry, props)
-for ls, ws in groups.items():
+for (ls, wk), ws in groups.items():
     lines = [LineString([merc(*p) for p in WAYS[w][0]]) for w in ws if w in WAYS and len(WAYS[w][0]) >= 2]
     if not lines: continue
     merged = linemerge(lines)
     parts = list(merged.geoms) if merged.geom_type == 'MultiLineString' else [merged]
-    prim, k = primary(ls)
+    prim, k = primary(ls, wk)
     props = {'l': prim, 'ls': '|' + '|'.join(str(i) for i in sorted(ls)) + '|', 'k': k}
     if k not in 'hr':
         props['c'] = L[prim][4] or '#888888'

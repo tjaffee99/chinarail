@@ -38,12 +38,16 @@ This is a passenger rail atlas, built from OpenStreetMap by four scripts in `too
    `route=railway` relations; their stops are the relation's stations plus passenger stations
    on the line's own track. A station only counts if the nearest main-line track is the line's
    own, so a line passing over or beside another line's station doesn't pick it up. Stations
-   with no open track nearby (lines still under construction) are left out.
+   with no open track nearby (lines still under construction) are left out. Relations often
+   miss stretches of their own line, so each line is extended along connected track that
+   carries its name.
 3. `curate.py` cleans `data/network.json` in place (below).
 4. `make_tiles.py` draws each listed line's track and packs the vector tiles. If a line has no
    track of its own between two stops, it is routed along the rail network (shortest path)
    and that track is drawn as part of the line (e.g. Beijing–Hong Kong between Lushan and
-   Nanchang East).
+   Nanchang East). Any pieces of a line still apart are joined along the rail network
+   (station tracks included); a piece that can't be joined and has no station is dropped.
+   Track shared by a high-speed and a conventional line is coloured by its own OSM tags.
 
 - **Removed:** freight-only railways (list in `tools/names.py`, from news and Wikipedia
   research; the low-confidence ones are marked), port, mine and coal branches, depot and

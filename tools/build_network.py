@@ -286,6 +286,31 @@ for k, t, routes in groups:
                   [station_for(s) for s in main], [[station_for(s) for s in b] for b in branches], int(loop), 0, 0, ''])
     geometry.append(ways)
 
+# OSM relations often leave out stretches of their own line: the ways are there and carry the
+# line's name, but aren't members. Grow each line along connected ways with the same name.
+def name_key(n):
+    n = re.sub(r'\s|\(.*?\)|（.*?）', '', n or '')
+    hs = bool(re.search(r'高速|高铁|客专|客运专线|城际', n))
+    return (re.sub(r'(高速铁路|高速线|高铁|客运专线|客专线|城际铁路|城际线|铁路|线)$', '', n), hs) if n else None
+KEY_WAYS, NODE_WAYS = defaultdict(set), defaultdict(set)
+for w, (t, c, refs) in WAYS.items():
+    if t.get('railway') not in ('rail', 'narrow_gauge') or t.get('service') or not t.get('name'): continue
+    k = name_key(t['name'])
+    if k and k[0]:
+        KEY_WAYS[k].add(w)
+        for n in refs: NODE_WAYS[n].add(w)
+def grow(ways, name):
+    k = name_key(name)
+    same = KEY_WAYS.get(k)
+    if not same: return ways
+    have = set(ways); frontier = [n for w in ways for n in WAYS[w][2]]
+    while frontier:
+        n = frontier.pop()
+        for w in NODE_WAYS.get(n, ()):
+            if w in same and w not in have:
+                have.add(w); frontier.extend(WAYS[w][2])
+    return sorted(have)
+
 # intercity: route=railway relations
 for rid, r in RELS.items():
     t = r['tags']
@@ -293,6 +318,7 @@ for rid, r in RELS.items():
     ways = [w for typ, w, role in r['members'] if typ == 'w' and w in WAYS]
     ways = [w for w in ways if WAYS[w][0].get('railway') in ('rail', 'narrow_gauge') and not WAYS[w][0].get('service')]
     if not ways: continue
+    ways = grow(ways, zh_of(t))
     L_m = sum(way_len(w) for w in ways)
     def fast(t):
         m = re.match(r'\d+', t.get('maxspeed') or '')
