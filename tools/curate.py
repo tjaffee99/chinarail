@@ -9,12 +9,12 @@ idempotent: run it again after editing the tables in names.py.
 Line record: [kind, zh, en, ref, colour, city, stations, branches, loop, km, hidden, label]
   hidden: 0 shown · 1 connector (original extract) · 2 hidden by this script
   label:  short English name drawn along the line on the map
-Station record: [zh, en, lon, lat, kind, lines, transfers]
+Station record: [zh, en, lon, lat, kind, lines, transfers, complex]  complex: id of the complex's main station, or -1
 """
 import json, re, sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 import jieba, pypinyin
-from names import LINE_EN, URBAN, STATION_EN
+from names import LINE_EN, URBAN, STATION_EN, FREIGHT
 jieba.setLogLevel(60)
 
 ROOT = os.path.join(os.path.dirname(__file__), '..')
@@ -90,6 +90,9 @@ for i, l in enumerate(L):
     in_nk = st and sum(inpoly(x[2], x[3], NORTH_KOREA) for x in st) >= 0.6 * len(st)
     if HANGUL.search(zh) or HANGUL.search(en) or re.search(r'[ŏŭ\u0400-\u04ff]', zh + en) or zh in ('白茂线',) or in_nk:
         hide(i, 'outside China'); continue
+    base = re.sub(r'^\(原\)', '', re.sub(r'(重载铁路|铁路|线)$', '', zh))
+    if l[0] == 'r' and (base in FREIGHT or re.search(r'港(?:线|铁路|支线|二线)$|煤|矿', zh)):
+        hide(i, 'freight only'); continue
     if NONROUTE.search(zh) and '城际' not in zh:
         hide(i, 'non-passenger track'); continue
     few = len(l[6]) < 2 and not (l[0] in URBAN_K and zh in KEEP_FEW)
@@ -225,6 +228,57 @@ for i, l in enumerate(L):
         lab = re.sub(r'Intercity (?:Railway|Line)', 'Intercity', lab)
         lab = re.sub(r'\s*\(.*?\)', '', lab)
         l[11] = lab
+
+# ---------------------------------------------------------------- direction
+# List stops in the order the name reads: "Beijing–Shanghai …" starts at Beijing.
+def norm_en(x): return re.sub(r"[’'\s-]", '', x or '').lower()
+flipped = 0
+for l in L:
+    if l[10] or l[0] not in 'hr' or len(l[6]) < 2: continue
+    m = re.match(r"^([A-Z][^–(]*?)–(?:.*–)?([A-Z][^–(]*?)\s+(?:High-Speed|Intercity|Railway|Express|Rail)", l[2])
+    if not m: continue
+    a, b = norm_en(m.group(1)), norm_en(m.group(2))
+    names = [norm_en(S[x][1]) for x in l[6]]
+    ia = [i for i, n in enumerate(names) if n.startswith(a)]
+    ib = [i for i, n in enumerate(names) if n.startswith(b)]
+    if ia and ib and min(ia) > max(ib) or (ia and not ib and min(ia) > len(names) / 2) or (ib and not ia and max(ib) < len(names) / 2):
+        l[6] = l[6][::-1]; flipped += 1
+print('stop lists flipped to match their name:', flipped)
+
+# ---------------------------------------------------------------- station complexes
+# A railway station and the metro stations built into it are one place: same label,
+# same panel, all lines listed together. Linked by OSM transfers, or metro within 400 m.
+def metres(a, b): return dist(a, b) * 111000
+parent = list(range(len(S)))
+def find(x):
+    while parent[x] != x: parent[x] = parent[parent[x]]; x = parent[x]
+    return x
+def union(a, b): parent[find(a)] = find(b)
+served = [any(not L[x][10] for x in s[5]) for s in S]
+for i, s in enumerate(S):
+    for t in s[6]:
+        if served[i] and served[t] and metres(i, t) < 800: union(i, t)
+import bisect
+rail = [i for i, s in enumerate(S) if s[4] in 'hr' and served[i]]
+urban = sorted((S[i][2], i) for i, s in enumerate(S) if s[4] not in 'hr' and served[i])
+xs = [u[0] for u in urban]
+for r in rail:
+    lo = bisect.bisect_left(xs, S[r][2] - 0.006); hi = bisect.bisect_right(xs, S[r][2] + 0.006)
+    for _, u in urban[lo:hi]:
+        if metres(r, u) < 400: union(r, u)
+groups = {}
+for i in range(len(S)):
+    if served[i]: groups.setdefault(find(i), []).append(i)
+def rank(i): s = S[i]; return (s[4] == 'h', s[4] == 'r', sum(not L[x][10] for x in s[5]))
+ncx = 0
+for s in S:
+    while len(s) < 8: s.append(-1)
+    s[7] = -1
+for members in groups.values():
+    if len(members) < 2: continue
+    rep = max(members, key=rank); ncx += 1
+    for m in members: S[m][7] = rep
+print('station complexes:', ncx)
 
 json.dump(d, open(P, 'w'), ensure_ascii=False, separators=(',', ':'))
 from collections import Counter

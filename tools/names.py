@@ -348,3 +348,10 @@ STATION_EN = {
     '金融岛北': 'Jinrongdao North',
     '乔庄东': 'Qiaozhuang East',
 }
+
+# Freight-only railways (no scheduled passenger trains, 2025–26). Matched on the name
+# with 线/铁路 variants. Researched from news and Wikipedia snippets; the low-confidence
+# ones (大准, 锡乌, 神朔, 邯黄, 黄万, 将淖, 三新, 大莱龙) should be checked against 12306.
+FREIGHT = ['大秦', '朔黄', '神黄', '准池', '准朔', '大准', '黄大', '唐包', '唐呼', '张唐', '蒙冀', '迁曹', '唐港',
+           '神朔', '包神', '甘泉', '巴准', '塔韩', '新准', '三新', '准兴', '巴新', '锡乌', '侯月', '邯黄', '黄万',
+           '嘉策', '额哈', '红淖', '将淖', '哈罗', '李港', '北仑', '浦东', '平南', '平盐', '益羊', '大莱龙', '瓦日']

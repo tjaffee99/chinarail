@@ -136,3 +136,14 @@ body{margin:0;background:var(--land);color:var(--ink);font:14px/1.35 -apple-syst
   .attr{max-width:calc(100% - 88px)}
   .attr .wide{display:none}
 }
+
+/* operator logos */
+.logos{display:flex;flex-wrap:wrap;gap:8px;padding:2px 16px 8px}
+.logo{height:34px;max-width:96px;object-fit:contain;background:#fff;border-radius:8px;padding:5px 7px;box-shadow:0 0 0 1px var(--panel-edge)}
+.logopop{display:flex;gap:0;background:#fff;border-radius:12px;padding:6px;box-shadow:var(--shadow);border:2px solid #3a3a3c;pointer-events:none}
+.logopop::after{content:"";position:absolute;left:50%;bottom:-8px;margin-left:-7px;border:7px solid transparent;border-top-color:#3a3a3c;border-bottom:0}
+.logo.pop{height:44px;max-width:120px;box-shadow:none;border-radius:6px;padding:4px 8px}
+.logo.pop+.logo.pop{border-left:1px solid #e5e5ea;border-radius:0}
+.badge.lgw{background:#fff!important;box-shadow:0 0 0 1px var(--panel-edge);padding:0 2px}
+.badge.lgw svg{display:none}
+.badge.lgw img{height:14px;width:auto;display:block}

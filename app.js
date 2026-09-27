@@ -113,7 +113,7 @@ function nameField(big) {
 }
 // station name with a row of route bullets underneath (image generated on demand: see styleimagemissing)
 function nameWithBullets() {
-  const img = ['image', ['concat', 'bs|', ['to-string', ['get', 'i']]]];
+  const img = ['image', ['concat', 'bs|', ['to-string', ['coalesce', ['get', 'cx'], ['get', 'i']]]]];
   const n = ['get', 'n'], z = ['get', 'z'];
   if (labelMode === 'en') return ['format', n, {}, '\n', {}, img, {}];
   if (labelMode === 'zh') return ['format', z, {}, '\n', {}, img, {}];
@@ -152,12 +152,14 @@ function baseName() {
   return ['case', ['==', EN, ZH], ZH, ['format', EN, {}, '\n', {}, ZH, { 'font-scale': 0.86, 'text-color': P.label2 }]];
 }
 function modeFilter(ks) { return ['in', ['get', 'k'], ['literal', ks]]; }
-function stnModeFilter() {
+// line kinds currently switched on (chip -> kinds): Metro covers metro and suburban, Tram covers funiculars
+function shownKinds() {
   const ks = [];
-  if (vis.h) ks.push('h'); if (vis.r) ks.push('r');
-  if (vis.m || vis.l) ks.push('m'); if (vis.t) ks.push('t', 'f');
+  if (vis.h) ks.push('h'); if (vis.r) ks.push('r'); if (vis.m) ks.push('m', 's'); if (vis.l) ks.push('l'); if (vis.t) ks.push('t', 'f');
   return ks;
 }
+// a station node is shown when a switched-on mode serves it (ks); a complex label when any mode serves the complex (kc)
+const servedBy = (prop, ks) => ks.length ? ['any', ...ks.map(k => ['in', k, ['coalesce', ['get', prop], '']])] : ['==', 1, 0];
 function buildStyle() {
   const selKey = sel == null ? '|none|' : '|' + sel + '|';
   const dim = sel == null ? 1 : P.dimOp;
@@ -209,10 +211,7 @@ function buildStyle() {
       'line-width': roadW([[5, 0.5, 0.4, 0.3, 0.2, 0.2, 0.2, 0.1], [8, 1, 0.9, 0.7, 0.5, 0.4, 0.3, 0.2], [11, 1.6, 1.4, 1.2, 1, 0.8, 0.5, 0.3], [14, 5, 4.6, 4.2, 3.6, 3, 2.4, 1.2], [18, 22, 20, 18, 16, 14, 12, 6]]) } });
   // intercity rail
   const on = k => vis[k] ? 'visible' : 'none';
-  const kindColor = ['match', ['get', 'k'], 'h', P.hsr, 'r', P.rail, P.track];
-  L.push({ id: 'rail-x', type: 'line', source: 'rail', 'source-layer': 'rail', minzoom: 8, filter: ['==', ['get', 'k'], 'x'], layout: { visibility: vis.r ? 'visible' : 'none', 'line-join': 'round' },
-    paint: { 'line-color': P.track, 'line-opacity': sel == null ? 0.9 : 0.4, 'line-width': W([[8, 0.5], [12, 1.1], [16, 2.2]]) } });
-  L.push({ id: 'rail-r-case', type: 'line', source: 'rail', 'source-layer': 'rail', minzoom: 8, filter: ['==', ['get', 'k'], 'r'], layout: { visibility: on('r'), 'line-join': 'round' },
+    L.push({ id: 'rail-r-case', type: 'line', source: 'rail', 'source-layer': 'rail', minzoom: 8, filter: ['==', ['get', 'k'], 'r'], layout: { visibility: on('r'), 'line-join': 'round' },
     paint: { 'line-color': P.casing, 'line-opacity': dim, 'line-width': W([[8, 3], [12, 5], [15, 7.4], [18, 10]]) } });
   L.push({ id: 'rail-r', type: 'line', source: 'rail', 'source-layer': 'rail', filter: ['==', ['get', 'k'], 'r'], layout: { visibility: on('r'), 'line-join': 'round', 'line-cap': 'round' },
     paint: { 'line-color': P.rail, 'line-opacity': dim, 'line-width': W([[3, 0.55], [5, 0.85], [7, 1.25], [9, 1.8], [12, 2.8], [15, 4.4], [18, 6.2]]) } });
@@ -230,8 +229,8 @@ function buildStyle() {
   L.push(uline('u-s', 's', [[7, 0.8], [10, 1.6], [12, 2.8], [14, 4.8], [17, 9.5]]));
   L.push(uline('u-m', 'm', [[7, 0.9], [9, 1.6], [11, 2.6], [12, 3.4], [14, 5.6], [17, 11]]));
   // line names along intercity lines, and route bullets along metro lines
-  const shownKinds = ['h', 'r'].filter(k => vis[k]);
-  L.push({ id: 'rail-name', type: 'symbol', source: 'rail', 'source-layer': 'rail', minzoom: 6, maxzoom: 12, filter: ['all', ['has', 'nm'], ['in', ['get', 'k'], ['literal', shownKinds]]],
+  const railKinds = ['h', 'r'].filter(k => vis[k]);
+  L.push({ id: 'rail-name', type: 'symbol', source: 'rail', 'source-layer': 'rail', minzoom: 6, maxzoom: 12, filter: ['all', ['has', 'nm'], ['in', ['get', 'k'], ['literal', railKinds]]],
     layout: { visibility: sel == null ? 'visible' : 'none', 'symbol-placement': 'line', 'symbol-spacing': 520, 'text-field': labelMode === 'zh' ? ['get', 'nz'] : ['get', 'nm'],
       'text-font': ['NotoSansMedium'], 'text-size': ['interpolate', ['linear'], ['zoom'], 6, 10.5, 11, 12.5], 'text-max-angle': 28, 'text-letter-spacing': 0.02, 'text-padding': 6,
       'symbol-sort-key': ['match', ['get', 'k'], 'h', 0, 1] },
@@ -243,13 +242,14 @@ function buildStyle() {
   L.push({ id: 'sel-case', type: 'line', source: 'rail', 'source-layer': 'rail', filter: selF, layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': P.casing, 'line-width': W([[3, 3.4], [8, 5.6], [12, 8.4], [14, 11], [17, 16]]) } });
   L.push({ id: 'sel-line', type: 'line', source: 'rail', 'source-layer': 'rail', filter: selF, layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': sel != null && D ? lineColor(sel) : P.sel, 'line-width': W([[3, 1.8], [8, 3.2], [12, 5], [14, 7], [17, 11]]) } });
   // intercity stations: white dots ringed in the line colour, hubs ringed dark; train glyph from z11
-  const sk = stnModeFilter();
+  const sk = shownKinds();
+  const railOn = vis.h || vis.r;
   const hub = ['any', ['>=', ['get', 'rk'], 10], ['>', ['get', 'x'], 2]];
-  L.push({ id: 'stn-rail', type: 'symbol', source: 'rail', 'source-layer': 'stn', filter: ['in', ['get', 'k'], ['literal', sk.filter(k => k === 'h' || k === 'r')]],
-    layout: { 'icon-image': ['step', ['zoom'], ['case', hub, 'hub', ['match', ['get', 'k'], 'h', 'dot-h', 'dot-r']], 11, ['match', ['get', 'k'], 'h', 'st-h', 'st-r']],
+  L.push({ id: 'stn-rail', type: 'symbol', source: 'rail', 'source-layer': 'stn', filter: ['all', ['in', ['get', 'k'], ['literal', ['h', 'r']]], servedBy('ks', sk)],
+    layout: { 'icon-image': ['step', ['zoom'], ['case', hub, 'hub', ['match', ['get', 'k'], 'h', 'dot-h', 'dot-r']], 11, logoReady.cr ? 'lg|cr' : ['match', ['get', 'k'], 'h', 'st-h', 'st-r']],
       'icon-size': ['interpolate', ['linear'], ['zoom'], 4, 0.6, 8, 0.85, 11, 0.8, 14, 1], 'icon-allow-overlap': true, 'icon-ignore-placement': true,
       'symbol-sort-key': ['-', 0, ['get', 'rk']],
-      'text-field': sel != null ? '' : ['step', ['zoom'], ['case', ['>=', ['get', 'rk'], 11], nameField(), ''], 7, ['case', ['>=', ['get', 'rk'], 8], nameField(), ''], 9, ['case', ['>=', ['get', 'rk'], 5], nameField(), ''], 11, nameField()],
+      'text-field': sel != null ? '' : ['step', ['zoom'], ['case', ['>=', ['get', 'rk'], 11], nameField(), ''], 7, ['case', ['>=', ['get', 'rk'], 8], nameField(), ''], 9, ['case', ['>=', ['get', 'rk'], 5], nameField(), ''], 11, nameField(), 14.5, nameWithBullets()],
       'text-font': ['case', hub, ['literal', ['NotoSansMedium']], ['literal', ['NotoSansRegular']]],
       'text-size': ['interpolate', ['linear'], ['zoom'], 5, ['case', hub, 12, 10.5], 10, ['case', hub, 14, 12], 16, ['case', hub, 16, 13.5]],
       'text-justify': 'auto', 'text-optional': true, 'text-max-width': 12, 'text-line-height': 1.15,
@@ -257,7 +257,9 @@ function buildStyle() {
     paint: { 'text-color': ['case', hub, P.label, P.label2], 'text-halo-color': P.halo, 'text-halo-width': 1.8,
       'icon-opacity': sel != null ? 0.35 : ['step', ['zoom'], ['case', ['>=', ['get', 'rk'], 8], 1, 0], 6, ['case', ['>=', ['get', 'rk'], 5], 1, 0], 8, 1],
       'text-opacity': sel == null ? 1 : 0.35 } });
-  const uk = ['in', ['get', 'k'], ['literal', sk.filter(k => k === 'm' || k === 't' || k === 'f')]];
+  const uk = ['all', ['!', ['in', ['get', 'k'], ['literal', ['h', 'r']]]], servedBy('ks', sk)];
+  // one label per station complex (its main station); if rail is switched off, metro stations inside rail hubs label themselves
+  const labelled = railOn ? ['==', ['get', 'rep'], 1] : ['any', ['==', ['get', 'rep'], 1], ['in', 'h', ['coalesce', ['get', 'kc'], '']], ['in', 'r', ['coalesce', ['get', 'kc'], '']]];
   // metro station dots as icons (not circles) so that route badges and labels avoid them
   const th = isDark() ? 'D' : 'L';
   const uDot = (id, minzoom, extra, transfer) => ({ id, type: 'symbol', source: 'rail', 'source-layer': 'stn', minzoom, filter: ['all', uk, extra],
@@ -268,7 +270,7 @@ function buildStyle() {
   L.push(uDot('stn-u1', 12, ['<=', ['get', 'x'], 1], false));
   L.push(uDot('stn-u', 11, ['>', ['get', 'x'], 1], true));
   // metro station names; from z14 with the route bullets underneath, as on a transit map
-  const uLabel = (id, minzoom, extra) => ({ id, type: 'symbol', source: 'rail', 'source-layer': 'stn', minzoom, filter: ['all', uk, extra],
+  const uLabel = (id, minzoom, extra) => ({ id, type: 'symbol', source: 'rail', 'source-layer': 'stn', minzoom, filter: ['all', uk, labelled, extra],
     layout: { visibility: sel == null ? 'visible' : 'none', 'text-field': ['step', ['zoom'], nameField(), 14.5, nameWithBullets()], 'text-font': ['NotoSansMedium'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 12, 11, 16, 13.5], 'text-variable-anchor': ['left', 'right', 'top', 'bottom'], 'text-radial-offset': 0.85, 'text-justify': 'auto',
       'text-max-width': 10, 'text-line-height': 1.2, 'symbol-sort-key': ['-', 0, ['get', 'x']] },
@@ -381,11 +383,16 @@ function makeDot(ring, r, w, fill) {
 }
 // row of route bullets for a station label
 function makeBulletRow(si) {
-  const ids = D && D.stations[si] ? sortLines(allLinesAt(si).filter(x => !D.lines[x][10] && 'mlstf'.includes(D.lines[x][0]))).slice(0, 8) : [];
-  if (!ids.length) { const [c] = canvas(1, 1); return img(c); }
+  const all = D && D.stations[si] ? allLinesAt(si).filter(x => !D.lines[x][10]) : [];
+  const ids = sortLines(all.filter(x => 'mlstf'.includes(D.lines[x][0]))).slice(0, 8);
+  const extra = [];
+  if (all.some(x => D.lines[x][0] === 'h')) extra.push({ t: 'HSR', col: HSR_BADGE });
+  if (all.some(x => D.lines[x][0] === 'r')) extra.push({ t: 'RL', col: RAIL_BADGE });
+  if (!ids.length && !extra.length) { const [c] = canvas(1, 1); return img(c); }
   const fs = 10.5 * DPR, h = 15 * DPR, pad = 3.5 * DPR, gap = 2.5 * DPR;
   const [m, mctx] = canvas(1, 1); mctx.font = `700 ${fs}px -apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif`;
-  const items = ids.map(i => { const t = badgeText(D.lines[i]); return { t, col: D.lines[i][4] || (D.lines[i][0] === 't' ? '#3FA34D' : '#888888'), w: t ? Math.max(h, mctx.measureText(t).width + pad * 2) : h * 0.7 }; });
+  const items = ids.map(i => ({ t: badgeText(D.lines[i]), col: D.lines[i][4] || (D.lines[i][0] === 't' ? '#3FA34D' : '#888888') })).concat(extra)
+    .map(it => ({ ...it, w: it.t ? Math.max(h, mctx.measureText(it.t).width + pad * 2) : h * 0.7 }));
   const W = items.reduce((a, b) => a + b.w, 0) + gap * (items.length - 1) + 2 * DPR;
   const [c, ctx] = canvas(W, h + 2 * DPR);
   ctx.font = mctx.font; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -438,6 +445,24 @@ function addIcons(map, force = false) {
   set('dot-h', makeDot(P.hsr, 3.2, 1.7, P.stnFill)); set('dot-r', makeDot(P.rail, 2.8, 1.5, P.stnFill));
   set('hub', makeDot(P.stnStroke, 4.2, 2, P.stnFill)); set('ap', makeAirport());
 }
+// China Railway logo as the station icon; stays on the drawn train glyph if the image can't be used (CORS/offline)
+function loadRailLogo() {
+  const u = LOGOS.cr && LOGOS.cr.url; if (!u) return;
+  const im = new Image(); im.crossOrigin = 'anonymous'; im.referrerPolicy = 'no-referrer';
+  im.onload = () => {
+    try {
+      const sz = 22 * DPR; const [c, ctx] = canvas(sz, sz);
+      ctx.fillStyle = '#FFFFFF'; rr(ctx, 0, 0, sz, sz, 6 * DPR); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = DPR; rr(ctx, 0.5 * DPR, 0.5 * DPR, sz - DPR, sz - DPR, 5.5 * DPR); ctx.stroke();
+      const pad = 3 * DPR, k = Math.min((sz - 2 * pad) / im.width, (sz - 2 * pad) / im.height), w = im.width * k, h = im.height * k;
+      ctx.drawImage(im, (sz - w) / 2, (sz - h) / 2, w, h);
+      const data = img(c);
+      if (!map.hasImage('lg|cr')) map.addImage('lg|cr', data, { pixelRatio: DPR });
+      logoReady.cr = true; applyStyle();
+    } catch (_) { /* tainted canvas: keep the glyph */ }
+  };
+  im.src = u;
+}
 const STATIC_ICONS = new Set(['st-h', 'st-r', 'dot-h', 'dot-r', 'hub', 'ap']);
 
 // ---------------------------------------------------------------- helpers over data
@@ -478,11 +503,30 @@ function termini(id) {
 }
 function stnName(s) { return s[1] || s[0]; }
 function stnLines(si) { return D.stations[si][5]; }
+// station complexes: a railway station and the metro stations built into it (station[7] = main station id)
+let COMPLEX = new Map();
+function complexOf(si) { const s = D.stations[si]; const rep = s && s[7] >= 0 ? s[7] : si; return { rep, members: COMPLEX.get(rep) || [si] }; }
 function allLinesAt(si) {
-  // lines serving the station plus lines at linked transfer stations
-  const s = D.stations[si]; const set = new Set(s[5]);
-  for (const t of s[6]) for (const l of D.stations[t][5]) set.add(l);
+  // lines serving the whole complex plus lines at linked transfer stations
+  const set = new Set();
+  for (const m of complexOf(si).members) { for (const l of D.stations[m][5]) set.add(l); for (const t of D.stations[m][6]) for (const l of D.stations[t][5]) set.add(l); }
   return [...set];
+}
+// operators and their logos (data/logos.json: Wikimedia Commons / Wikipedia images)
+let LOGOS = {};
+const logoReady = {};
+const GD_CITIES = new Set(['Guangzhou', 'Dongguan', 'Qingyuan', 'Foshan', 'Zhaoqing', 'Huizhou', 'Zhuhai', 'Jiangmen', 'Zhongshan']);
+function operatorOf(id) {
+  const l = D.lines[id];
+  if (l[0] === 'h' || l[0] === 'r') return 'cr';
+  const city = D.cities[l[5]] ? D.cities[l[5]][1] : '';
+  if (l[1].includes('香港電車')) return 'hktram';
+  if (l[1].includes('城际') && GD_CITIES.has(city)) return 'prdir';
+  return city;
+}
+function logosHTML(ids, cls = '') {
+  const ops = [...new Set(ids.map(operatorOf))].filter(k => LOGOS[k]);
+  return ops.map(k => `<img class="logo ${cls}" src="${esc(LOGOS[k].url)}" alt="${esc(LOGOS[k].name)}" title="${esc(LOGOS[k].name)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`).join('');
 }
 function sortLines(ids) {
   const ord = { m: 0, s: 1, l: 2, t: 3, f: 4, h: 5, r: 6 };
@@ -520,7 +564,6 @@ function renderHome() {
   h += `<div class="sec">Key</div><div class="legend">
     <i style="background:var(--hsr);height:5px"></i><span>High-speed railway</span>
     <i style="background:var(--rail)"></i><span>Conventional railway</span>
-    <i class="track"></i><span>Other track (freight, depots, links)</span>
     <i style="background:linear-gradient(90deg,#E4002B 0 25%,#0057B8 25% 50%,#009A44 50% 75%,#F2A900 75%)"></i><span>Metro and light rail, in official line colours</span></div>`;
   h += `<div class="sec">Cities with urban rail · ${cities.length}</div>`;
   for (const [i, c] of cities) {
@@ -554,6 +597,7 @@ function renderLine(id, push = true) {
   const kind = KNAME[l[0]];
   const meta = [kind, l[0] === 'h' || l[0] === 'r' ? '' : cityName(l[5]), l[6].length ? `${l[6].length} stations` : '', l[9] ? `${l[9].toLocaleString()} km` : ''].filter(Boolean).join(' · ');
   let h = (view.stack.length ? BACK : '') + `<div class="dhead">${badgeHTML(id)}<div><h2>${esc(lineTitle(id))}</h2><div class="zh">${esc(l[1])}</div><div class="meta">${esc(meta)}</div>${termini(id) ? `<div class="meta">${esc(termini(id))}</div>` : ''}</div>${CLOSE}</div>`;
+  const lg = logosHTML([id]); if (lg) h += `<div class="logos">${lg}</div>`;
   if (!l[6].length) h += `<div class="note">OpenStreetMap has no station data for this line.</div>`;
   h += stopList(l[6], col, id, !!l[8]);
   for (const br of l[7]) {
@@ -574,29 +618,38 @@ function stopList(st, col, lineId, loop) {
     const urb = other.filter(x => 'mlstf'.includes(D.lines[x][0]));
     const inter = other.filter(x => 'hr'.includes(D.lines[x][0]));
     let tx = urb.slice(0, 6).map(x => badgeHTML(x, 'sm')).join('');
-    if (inter.length) tx += `<span class="badge sm ${inter.some(x => D.lines[x][0] === 'h') ? 'hsr' : 'rl'}" title="Rail connection">🚆︎</span>`.replace('🚆︎', '<svg viewBox="0 0 10 10" width="10" height="10" fill="currentColor"><rect x="2.3" y="0.8" width="5.4" height="6.4" rx="1.4"/><rect x="3.1" y="1.8" width="3.8" height="2" fill="#0003"/><path d="M3 7.6 2 9.4M7 7.6 8 9.4" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>');
+    if (inter.length) tx += `<span class="badge sm ${inter.some(x => D.lines[x][0] === 'h') ? 'hsr' : 'rl'}${LOGOS.cr ? ' lgw' : ''}" title="China Railway connection">${LOGOS.cr ? `<img src="${esc(LOGOS.cr.url)}" alt="" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('lgw')">` : ''}🚆︎</span>`.replace('🚆︎', '<svg viewBox="0 0 10 10" width="10" height="10" fill="currentColor"><rect x="2.3" y="0.8" width="5.4" height="6.4" rx="1.4"/><rect x="3.1" y="1.8" width="3.8" height="2" fill="#0003"/><path d="M3 7.6 2 9.4M7 7.6 8 9.4" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>');
     const x = other.length > 0;
     h += `<li class="stop${x ? ' x' : ''}" data-stn="${si}" tabindex="0"><span class="rail"></span><span class="st"><b>${esc(stnName(s))}</b>${s[1] && s[1] !== s[0] ? `<span>${esc(s[0])}</span>` : ''}</span><span class="tx">${tx}</span></li>`;
   }
   return h + '</ol>';
 }
+const STN_KIND = { h: 'High-speed rail', r: 'Railway', m: 'Metro', l: 'Light rail', s: 'Suburban rail', t: 'Tram', f: 'Funicular' };
 function renderStation(si, push = true) {
-  const s = D.stations[si];
-  const lines = sortLines([...s[5]]);
-  const trs = s[6];
-  const kind = s[4] === 'h' ? 'High-speed rail station' : s[4] === 'r' ? 'Railway station' : s[4] === 't' ? 'Tram stop' : 'Metro station';
-  let h = (view.stack.length ? BACK : '') + `<div class="dhead"><span class="ico stn" style="border-color:${s[4] === 'h' ? 'var(--hsr)' : s[4] === 'r' ? 'var(--rail)' : '#2C2C2E'}"></span><div><h2>${esc(stnName(s))}</h2>${s[1] && s[1] !== s[0] ? `<div class="zh">${esc(s[0])}</div>` : ''}<div class="meta">${kind}</div></div>${CLOSE}</div>`;
-  const real = lines.filter(i => !D.lines[i][10]);
-  if (real.length) { h += `<div class="sec">Lines</div>`; for (const i of real) h += lineRow(i, false); }
-  if (trs.length) {
+  const { rep, members } = complexOf(si);
+  const s = D.stations[rep];
+  const lines = sortLines([...new Set(members.flatMap(m => D.stations[m][5]))].filter(i => !D.lines[i][10]));
+  const kinds = [...new Set(lines.map(i => D.lines[i][0]))].sort((a, b) => 'hrmslft'.indexOf(a) - 'hrmslft'.indexOf(b));
+  const kindText = kinds.map(k => STN_KIND[k]).filter(Boolean).join(' · ') + (s[4] === 'h' || s[4] === 'r' ? ' station' : '');
+  const logos = logosHTML(lines);
+  let h = (view.stack.length ? BACK : '') + `<div class="dhead"><span class="ico stn" style="border-color:${s[4] === 'h' ? 'var(--hsr)' : s[4] === 'r' ? 'var(--rail)' : '#2C2C2E'}"></span><div><h2>${esc(stnName(s))}</h2>${s[1] && s[1] !== s[0] ? `<div class="zh">${esc(s[0])}</div>` : ''}<div class="meta">${esc(kindText)}</div></div>${CLOSE}</div>`;
+  if (logos) h += `<div class="logos">${logos}</div>`;
+  const rail = lines.filter(i => 'hr'.includes(D.lines[i][0])), urban = lines.filter(i => !'hr'.includes(D.lines[i][0]));
+  if (rail.length) { h += `<div class="sec">Rail</div>`; for (const i of rail) h += lineRow(i, false); }
+  if (urban.length) {
+    const byCity = {}; for (const i of urban) (byCity[cityName(D.lines[i][5])] ||= []).push(i);
+    for (const [c, ids] of Object.entries(byCity)) { h += `<div class="sec">${esc(c ? c + ' metro & light rail' : 'Urban rail')}</div>`; for (const i of ids) h += lineRow(i, false); }
+  }
+  const inComplex = new Set(members);
+  const near = [...new Set(members.flatMap(m => D.stations[m][6]))].filter(t => !inComplex.has(t) && complexOf(t).rep !== rep);
+  if (near.length) {
     h += `<div class="sec">Connections nearby</div>`;
-    for (const t of trs) {
+    for (const t of near) {
       const o = D.stations[t]; const ol = sortLines(o[5].filter(i => !D.lines[i][10]));
-      const k = o[4] === 'h' ? 'High-speed rail station' : o[4] === 'r' ? 'Railway station' : o[4] === 't' ? 'Tram stop' : 'Metro station';
-      h += `<button class="row" data-stn="${t}"><span class="ico stn" style="border-color:${o[4] === 'h' ? 'var(--hsr)' : o[4] === 'r' ? 'var(--rail)' : '#2C2C2E'}"></span><span class="t"><b>${esc(stnName(o))}</b><span>${esc(k)}${ol.length ? ' · ' + ol.length + ' line' + (ol.length > 1 ? 's' : '') : ''}</span></span></button>`;
+      h += `<button class="row" data-stn="${t}"><span class="ico stn" style="border-color:${o[4] === 'h' ? 'var(--hsr)' : o[4] === 'r' ? 'var(--rail)' : '#2C2C2E'}"></span><span class="t"><b>${esc(stnName(o))}</b><span>${esc(STN_KIND[o[4]] || '')}${ol.length ? ' · ' + ol.length + ' line' + (ol.length > 1 ? 's' : '') : ''}</span></span></button>`;
     }
   }
-  if (push) pushView(['stn', si]);
+  if (push) pushView(['stn', rep]);
   setBody(h, true);
 }
 function renderChooser(ids) {
@@ -626,6 +679,7 @@ function buildIndex() {
   const seen = new Map();
   D.stations.forEach((s, i) => {
     if (!s[5].some(x => !D.lines[x][10])) return;
+    if (s[7] >= 0 && s[7] !== i) return;
     const key = s[0] + '|' + s[4] + '|' + Math.round(s[2] * 20) + '|' + Math.round(s[3] * 20);
     if (seen.has(key)) return; seen.set(key, i);
     IDX.push({ t: 's', i, a: norm(s[1]), b: norm(s[0]) });
@@ -686,6 +740,7 @@ function padding() {
   return { top: 60, bottom: 60, left: Math.min(380, innerWidth * 0.45), right: 70 };
 }
 function selectLine(id, { fit = true } = {}) {
+  showLogoPopup(null);
   sel = id; selStation = null;
   applyStyle();
   if (fit) {
@@ -697,10 +752,22 @@ function selectLine(id, { fit = true } = {}) {
   }
   renderLine(id);
 }
-function clearSelection() { if (sel != null || selStation != null) { sel = null; selStation = null; applyStyle(); } }
+function clearSelection() { showLogoPopup(null); if (sel != null || selStation != null) { sel = null; selStation = null; applyStyle(); } }
+// operator logos above the selected station, like a transit map's station callout
+let logoPopup = null;
+function showLogoPopup(si) {
+  if (logoPopup) { logoPopup.remove(); logoPopup = null; }
+  if (si == null) return;
+  const lines = allLinesAt(si).filter(i => !D.lines[i][10] && complexOf(si).members.some(m => D.stations[m][5].includes(i)));
+  const html = logosHTML(lines, 'pop');
+  if (!html) return;
+  const el = document.createElement('div'); el.className = 'logopop'; el.innerHTML = html;
+  logoPopup = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -16] }).setLngLat([D.stations[si][2], D.stations[si][3]]).addTo(map);
+}
 function showStation(si, { fly = true } = {}) {
+  si = complexOf(si).rep;
   const s = D.stations[si];
-  selStation = si; applyStyle();
+  selStation = si; applyStyle(); showLogoPopup(si);
   if (fly) {
     const z = Math.max(map.getZoom(), s[4] === 'h' || s[4] === 'r' ? 12.5 : 14);
     map.flyTo({ center: [s[2], s[3]], zoom: z, padding: padding(), duration: 800 });
@@ -764,6 +831,8 @@ async function boot() {
   try { const lm = localStorage.getItem('cra-lab'); if (lm) labelMode = lm; } catch (_) {}
   const [m, d] = await Promise.all([fetch('data/manifest.json').then(r => r.json()), fetch('data/network.json').then(r => r.json())]);
   manifest = m; D = d;
+  COMPLEX = new Map(); D.stations.forEach((s, i) => { if (s[7] >= 0) { if (!COMPLEX.has(s[7])) COMPLEX.set(s[7], []); COMPLEX.get(s[7]).push(i); } });
+  try { LOGOS = await fetch('data/logos.json').then(r => r.json()); } catch (_) { LOGOS = {}; }
   for (const c of D.cities) c[5] = 0;
   for (const l of D.lines) if (!l[10] && 'mlstf'.includes(l[0]) && D.cities[l[5]]) D.cities[l[5]][5]++;
   buildIndex(); renderChips(); renderHome();
@@ -795,7 +864,7 @@ async function boot() {
     } else if (STATIC_ICONS.has(id)) addIcons(map);
   });
   if (innerWidth <= 640 && !/[#&]view=/.test(location.hash)) map.jumpTo({ center: [110.5, 31.5], zoom: 3 });
-  map.on('load', () => { addIcons(map); $('#loading').classList.add('done'); });
+  map.on('load', () => { addIcons(map); loadRailLogo(); $('#loading').classList.add('done'); });
   map.on('rotate', () => { $('#compass svg').style.transform = `rotate(${-map.getBearing()}deg)`; });
   const railLayers = ['u-m', 'u-s', 'u-l', 'u-t', 'u-f', 'rail-h', 'rail-r', 'sel-line'];
   const stnLayers = ['stn-u', 'stn-u1', 'stn-rail', 'sel-stn'];
